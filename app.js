@@ -5,24 +5,73 @@
   const statusEl = document.getElementById('status');
   const statusText = document.getElementById('status-text');
   const chat = document.getElementById('chat');
-  const chatWrapper = document.getElementById('chat-wrapper');
   const pauseIndicator = document.getElementById('pause-indicator');
 
   const STORAGE_KEY = 'twitch-chat-monitor-channel';
   const TELEPROMPTER_KEY = 'twitch-chat-monitor-teleprompter';
   const REVERSE_KEY = 'twitch-chat-monitor-reverse';
   const FONT_SIZE_KEY = 'twitch-chat-monitor-font-size';
+  const FONT_FAMILY_KEY = 'twitch-chat-monitor-font-family';
+  const TIMESTAMPS_KEY = 'twitch-chat-monitor-timestamps';
+  const BADGES_KEY = 'twitch-chat-monitor-badges-hidden'; // '1' = hidden, anything else = shown
   const MAX_MESSAGES = 250;
   const FONT_MIN = 10;
   const FONT_MAX = 64;
 
+  // Curated font stacks. Each value maps a select-option id to a CSS font-family
+  // string + weight. All entries fall back to system fonts so nothing is loaded
+  // from the network.
+  const FONT_FAMILIES = {
+    gotham:      { family: "'Gotham Bold', 'Gotham', 'Montserrat', 'Helvetica Neue', Arial, sans-serif", weight: 700 },
+    'arial-black': { family: "'Arial Black', 'Helvetica Neue', Arial, sans-serif", weight: 900 },
+    impact:      { family: "Impact, 'Haettenschweiler', 'Arial Narrow Bold', sans-serif", weight: 400 },
+    verdana:     { family: "Verdana, Geneva, sans-serif", weight: 700 },
+    tahoma:      { family: "Tahoma, Geneva, sans-serif", weight: 700 },
+    trebuchet:   { family: "'Trebuchet MS', 'Lucida Sans Unicode', sans-serif", weight: 700 },
+    georgia:     { family: "Georgia, 'Times New Roman', serif", weight: 700 },
+    consolas:    { family: "Consolas, 'Courier New', monospace", weight: 700 },
+    courier:     { family: "'Courier New', Courier, monospace", weight: 700 },
+    system:      { family: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", weight: 500 },
+  };
+
   let ws = null;
   let currentChannel = null;
   let autoScroll = true;
-  let isPaused = false;
   let reconnectAttempts = 0;
   let intentionalClose = false;
   let reverseDirection = localStorage.getItem(REVERSE_KEY) === '1';
+  let manualPause = false;           // explicit Pause button state
+  let userFilter = null;             // lowercased username; null = no filter
+  let roomId = null;                 // broadcaster id (from ROOMSTATE) for emote APIs
+  const thirdPartyEmotes = new Map();// emote text -> { url, provider }
+  const badgeImages = new Map();     // "set/version" -> image URL (Twitch CDN)
+
+  const filterBanner = document.getElementById('filter-banner');
+  const filterUserEl = document.getElementById('filter-user');
+  const pauseBtn = document.getElementById('pause-btn');
+  const clearBtn = document.getElementById('clear-btn');
+  const timestampsBtn = document.getElementById('timestamps-btn');
+  const settingsBtn = document.getElementById('settings-btn');
+  const settingsMenu = document.getElementById('settings-menu');
+
+  // Settings popover toggle. Open/close via the gear button; click outside closes.
+  function setSettingsOpen(open) {
+    settingsMenu.hidden = !open;
+    settingsBtn.classList.toggle('active', open);
+    settingsBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  settingsBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setSettingsOpen(settingsMenu.hidden);
+  });
+  document.addEventListener('click', (e) => {
+    if (settingsMenu.hidden) return;
+    if (settingsMenu.contains(e.target) || settingsBtn.contains(e.target)) return;
+    setSettingsOpen(false);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !settingsMenu.hidden) setSettingsOpen(false);
+  });
 
   // Restore last channel
   const savedChannel = localStorage.getItem(STORAGE_KEY);
@@ -54,6 +103,21 @@
   document.getElementById('font-inc').addEventListener('click', () => { chatFontSize += 2; applyFontSize(); });
   document.getElementById('font-dec').addEventListener('click', () => { chatFontSize -= 2; applyFontSize(); });
 
+  // Font family selector
+  const fontFamilySelect = document.getElementById('font-family-select');
+  function applyFontFamily(key) {
+    const spec = FONT_FAMILIES[key] || FONT_FAMILIES.gotham;
+    document.documentElement.style.setProperty('--chat-font-family', spec.family);
+    document.documentElement.style.setProperty('--chat-font-weight', String(spec.weight));
+    localStorage.setItem(FONT_FAMILY_KEY, key);
+  }
+  const savedFontFamily = localStorage.getItem(FONT_FAMILY_KEY) || 'gotham';
+  if (FONT_FAMILIES[savedFontFamily]) {
+    fontFamilySelect.value = savedFontFamily;
+    applyFontFamily(savedFontFamily);
+  }
+  fontFamilySelect.addEventListener('change', () => applyFontFamily(fontFamilySelect.value));
+
   // Restore + wire up invert toggle
   const invertBtn = document.getElementById('invert-btn');
   if (reverseDirection) invertBtn.classList.add('active');
@@ -84,6 +148,11 @@
   }
 
   function appendMessage(node) {
+    // Apply active user filter at insertion time so the DOM stays consistent.
+    if (userFilter) {
+      const u = node.dataset && node.dataset.user;
+      if (!u || u !== userFilter) node.classList.add('filter-hidden');
+    }
     if (reverseDirection) {
       chat.insertBefore(node, chat.firstChild);
       while (chat.children.length > MAX_MESSAGES) {
@@ -98,6 +167,35 @@
     if (autoScroll) scrollToNewest();
   }
 
+  function formatTime(date) {
+    const d = date || new Date();
+    return d.getHours().toString().padStart(2, '0') + ':' +
+           d.getMinutes().toString().padStart(2, '0');
+  }
+
+  function applyFilterToExisting() {
+    for (const m of chat.children) {
+      if (!userFilter) {
+        m.classList.remove('filter-hidden');
+      } else {
+        const u = m.dataset && m.dataset.user;
+        m.classList.toggle('filter-hidden', !u || u !== userFilter);
+      }
+    }
+  }
+
+  function setUserFilter(name) {
+    userFilter = name ? name.toLowerCase() : null;
+    if (userFilter) {
+      filterUserEl.textContent = userFilter;
+      filterBanner.hidden = false;
+    } else {
+      filterBanner.hidden = true;
+    }
+    applyFilterToExisting();
+    if (autoScroll) scrollToNewest();
+  }
+
   function scrollToNewest() {
     chat.scrollTop = reverseDirection ? 0 : chat.scrollHeight;
   }
@@ -108,35 +206,86 @@
     return chat.scrollHeight - chat.scrollTop - chat.clientHeight < 30;
   }
 
-  chatWrapper.addEventListener('mouseenter', () => {
-    isPaused = true;
-    if (!checkAtNewest()) {
+  // Pause auto-scroll based purely on scroll position. Works on both mouse wheel
+  // and touch scrolling without depending on hover events (which don't fire on
+  // mobile / tablet). Manual pause overrides this.
+  chat.addEventListener('scroll', () => {
+    if (manualPause) return;
+    if (checkAtNewest()) {
+      autoScroll = true;
+      pauseIndicator.classList.remove('visible');
+    } else {
       autoScroll = false;
       pauseIndicator.classList.add('visible');
     }
   });
-  chatWrapper.addEventListener('mouseleave', () => {
-    isPaused = false;
+  pauseIndicator.addEventListener('click', () => {
+    if (manualPause) return; // user must release manual pause explicitly
     autoScroll = true;
-    pauseIndicator.classList.remove('visible');
     scrollToNewest();
+    pauseIndicator.classList.remove('visible');
   });
-  chat.addEventListener('scroll', () => {
-    if (isPaused) {
-      if (checkAtNewest()) {
-        autoScroll = true;
-        pauseIndicator.classList.remove('visible');
-      } else {
-        autoScroll = false;
-        pauseIndicator.classList.add('visible');
-      }
+
+  // Manual pause button
+  pauseBtn.addEventListener('click', () => {
+    manualPause = !manualPause;
+    pauseBtn.classList.toggle('active', manualPause);
+    pauseBtn.textContent = manualPause ? 'Resume' : 'Pause';
+    if (manualPause) {
+      autoScroll = false;
+      pauseIndicator.classList.add('visible');
+    } else {
+      autoScroll = true;
+      scrollToNewest();
+      pauseIndicator.classList.remove('visible');
     }
   });
-  pauseIndicator.addEventListener('click', () => {
-    autoScroll = true;
-    scrollToNewest();
-    pauseIndicator.classList.remove('visible');
+
+  // Clear chat button
+  clearBtn.addEventListener('click', () => {
+    chat.innerHTML = '';
   });
+
+  // Timestamps toggle
+  if (localStorage.getItem(TIMESTAMPS_KEY) === '1') {
+    document.body.classList.add('show-timestamps');
+    timestampsBtn.classList.add('active');
+  }
+  timestampsBtn.addEventListener('click', () => {
+    const on = document.body.classList.toggle('show-timestamps');
+    timestampsBtn.classList.toggle('active', on);
+    localStorage.setItem(TIMESTAMPS_KEY, on ? '1' : '0');
+  });
+
+  // Badges toggle — default is shown. When hidden we also skip the badge CDN
+  // fetch to keep network activity minimal.
+  const badgesBtn = document.getElementById('badges-btn');
+  const badgesHiddenInit = localStorage.getItem(BADGES_KEY) === '1';
+  if (badgesHiddenInit) {
+    document.body.classList.add('hide-badges');
+  } else {
+    badgesBtn.classList.add('active');
+  }
+  badgesBtn.addEventListener('click', () => {
+    const nowHidden = document.body.classList.toggle('hide-badges');
+    badgesBtn.classList.toggle('active', !nowHidden);
+    localStorage.setItem(BADGES_KEY, nowHidden ? '1' : '0');
+    // If the user just enabled badges and we have a room id but no badges
+    // loaded, fetch them now.
+    if (!nowHidden && roomId && badgeImages.size === 0) {
+      loadBadges(roomId);
+    }
+  });
+
+  // Click a username to filter to that user; clear filter via banner button.
+  chat.addEventListener('click', (e) => {
+    const nameEl = e.target.closest('.name');
+    if (!nameEl) return;
+    const msgEl = nameEl.closest('.msg');
+    if (!msgEl || !msgEl.dataset.user) return;
+    setUserFilter(msgEl.dataset.user);
+  });
+  document.getElementById('filter-clear').addEventListener('click', () => setUserFilter(null));
 
   // ---- IRC tag parsing ----
   function parseTags(tagString) {
@@ -210,43 +359,56 @@
     if (!badgesTag) return '';
     const out = [];
     for (const b of badgesTag.split(',')) {
-      const [id] = b.split('/');
-      const cls = BADGE_LABELS[id] ? id : 'default';
-      const label = BADGE_LABELS[id] || id.slice(0, 3).toUpperCase();
-      out.push(`<span class="badge ${cls}">${escapeHtml(label)}</span>`);
+      const [id, version] = b.split('/');
+      const label = BADGE_LABELS[id] || id;
+      // Prefer the real Twitch badge image when we have one. Otherwise fall
+      // back to the colored text-badge styling.
+      const iconUrl = badgeImages.get(`${id}/${version}`);
+      if (iconUrl && isSafeEmoteUrl(iconUrl)) {
+        out.push(
+          `<span class="badge badge-img" title="${escapeHtml(label)}">` +
+          `<img src="${escapeHtml(iconUrl)}" alt="${escapeHtml(label)}" /></span>`
+        );
+      } else {
+        const cls = BADGE_LABELS[id] ? id : 'default';
+        const text = BADGE_LABELS[id] || id.slice(0, 3).toUpperCase();
+        out.push(`<span class="badge ${cls}" title="${escapeHtml(label)}">${escapeHtml(text)}</span>`);
+      }
     }
     return out.join('');
   }
 
   // ---- Emote rendering ----
-  // emotes tag: "id:start-end,start-end/id:start-end"
+  // Twitch's "emotes" tag uses character positions on the visible message:
+  //   "id:start-end,start-end/id:start-end"
+  // Third-party emotes (BTTV / FFZ / 7TV) match by exact whitespace-delimited
+  // token. We splice Twitch emotes in first (by position), then run third-party
+  // matching against the remaining text segments.
   function renderMessageWithEmotes(text, emotesTag) {
-    // Twitch positions are based on UTF-16 code points in the visible message.
-    // Use Array.from to handle surrogate pairs correctly.
     const chars = Array.from(text);
-    if (!emotesTag) return escapeHtml(chars.join(''));
+    const hasTpe = thirdPartyEmotes.size > 0;
+    if (!emotesTag && !hasTpe) return escapeHtml(chars.join(''));
 
-    // Collect replacements: array of {start, end, id}
     const replacements = [];
-    for (const emote of emotesTag.split('/')) {
-      const [id, ranges] = emote.split(':');
-      if (!ranges) continue;
-      // Twitch emote IDs are alphanumeric/underscore. Skip anything else to keep
-      // the id safe to interpolate into an <img src="..."> URL.
-      if (!/^[A-Za-z0-9_]+$/.test(id)) continue;
-      for (const range of ranges.split(',')) {
-        const [start, end] = range.split('-').map(Number);
-        if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) continue;
-        replacements.push({ start, end, id });
+    if (emotesTag) {
+      for (const emote of emotesTag.split('/')) {
+        const [id, ranges] = emote.split(':');
+        if (!ranges) continue;
+        if (!/^[A-Za-z0-9_]+$/.test(id)) continue;
+        for (const range of ranges.split(',')) {
+          const [start, end] = range.split('-').map(Number);
+          if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) continue;
+          replacements.push({ start, end, id });
+        }
       }
+      replacements.sort((a, b) => a.start - b.start);
     }
-    replacements.sort((a, b) => a.start - b.start);
 
     let html = '';
     let i = 0;
     for (const r of replacements) {
       if (r.start > i) {
-        html += escapeHtml(chars.slice(i, r.start).join(''));
+        html += renderTextSegment(chars.slice(i, r.start).join(''));
       }
       const emoteText = chars.slice(r.start, r.end + 1).join('');
       const url = `https://static-cdn.jtvnw.net/emoticons/v2/${r.id}/default/dark/1.0`;
@@ -254,9 +416,165 @@
       i = r.end + 1;
     }
     if (i < chars.length) {
-      html += escapeHtml(chars.slice(i).join(''));
+      html += renderTextSegment(chars.slice(i).join(''));
     }
     return html;
+  }
+
+  function renderTextSegment(text) {
+    if (thirdPartyEmotes.size === 0) return escapeHtml(text);
+    // Split on whitespace but preserve it so spacing stays intact.
+    const parts = text.split(/(\s+)/);
+    let out = '';
+    for (const part of parts) {
+      if (!part) continue;
+      if (/^\s+$/.test(part)) { out += escapeHtml(part); continue; }
+      const tpe = thirdPartyEmotes.get(part);
+      if (tpe && isSafeEmoteUrl(tpe.url)) {
+        out += `<img class="emote tpe" src="${escapeHtml(tpe.url)}" alt="${escapeHtml(part)}" title="${escapeHtml(part)} (${tpe.provider})" />`;
+      } else {
+        out += escapeHtml(part);
+      }
+    }
+    return out;
+  }
+
+  function isSafeEmoteUrl(u) {
+    // Defense in depth: only allow https URLs with no quote characters.
+    return typeof u === 'string' && /^https:\/\/[^"\s]+$/.test(u);
+  }
+
+  // ---- Third-party emotes (BTTV / FFZ / 7TV) ----
+  // Each provider has a public, no-auth API. We populate `thirdPartyEmotes`
+  // with text -> { url, provider } entries. Failures are silent so the chat
+  // still works even if one provider is down.
+  async function loadThirdPartyEmotes(channel, broadcasterId) {
+    thirdPartyEmotes.clear();
+    await Promise.allSettled([
+      loadBTTV(broadcasterId),
+      loadFFZ(channel),
+      load7TV(broadcasterId),
+    ]);
+  }
+
+  // ---- Twitch badges ----
+  // Uses the legacy `badges.twitch.tv` endpoints which are still reachable
+  // without auth. If they ever go away the renderBadges() fallback to text
+  // labels remains intact, so users just see the original badge style again.
+  async function loadBadges(broadcasterId) {
+    badgeImages.clear();
+    // Globals first so any channel-specific override (e.g. custom sub badges
+    // for different tiers) wins on collision.
+    await fetchBadgeSet('https://badges.twitch.tv/v1/badges/global/display');
+    if (broadcasterId) {
+      await fetchBadgeSet(`https://badges.twitch.tv/v1/badges/channels/${broadcasterId}/display`);
+    }
+  }
+  async function fetchBadgeSet(url) {
+    try {
+      const r = await fetch(url);
+      if (!r.ok) return;
+      const data = await r.json();
+      const sets = data.badge_sets || {};
+      for (const setKey of Object.keys(sets)) {
+        const versions = sets[setKey].versions || {};
+        for (const v of Object.keys(versions)) {
+          const img = versions[v].image_url_2x || versions[v].image_url_1x;
+          if (img && isSafeEmoteUrl(img)) {
+            // Channel-specific entries naturally override globals (loaded later
+            // by Promise.allSettled — for subscriber/bits tiers this is what
+            // we want).
+            badgeImages.set(`${setKey}/${v}`, img);
+          }
+        }
+      }
+    } catch (_) {
+      // Silent — fall back to text badges.
+    }
+  }
+
+  async function loadBTTV(broadcasterId) {
+    // Global
+    try {
+      const r = await fetch('https://api.betterttv.net/3/cached/emotes/global');
+      if (r.ok) {
+        const list = await r.json();
+        for (const e of list) registerTpe(e.code, `https://cdn.betterttv.net/emote/${e.id}/2x`, 'BTTV');
+      }
+    } catch (_) {}
+    // Channel
+    try {
+      const r = await fetch(`https://api.betterttv.net/3/cached/users/twitch/${broadcasterId}`);
+      if (r.ok) {
+        const data = await r.json();
+        const list = [...(data.channelEmotes || []), ...(data.sharedEmotes || [])];
+        for (const e of list) registerTpe(e.code, `https://cdn.betterttv.net/emote/${e.id}/2x`, 'BTTV');
+      }
+    } catch (_) {}
+  }
+
+  async function loadFFZ(channel) {
+    try {
+      const r = await fetch('https://api.frankerfacez.com/v1/set/global');
+      if (r.ok) {
+        const data = await r.json();
+        for (const setId of Object.keys(data.sets || {})) {
+          for (const e of (data.sets[setId].emoticons || [])) {
+            const url = pickFfzUrl(e.urls);
+            if (url) registerTpe(e.name, url, 'FFZ');
+          }
+        }
+      }
+    } catch (_) {}
+    try {
+      const r = await fetch(`https://api.frankerfacez.com/v1/room/${channel}`);
+      if (r.ok) {
+        const data = await r.json();
+        for (const setId of Object.keys(data.sets || {})) {
+          for (const e of (data.sets[setId].emoticons || [])) {
+            const url = pickFfzUrl(e.urls);
+            if (url) registerTpe(e.name, url, 'FFZ');
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  function pickFfzUrl(urls) {
+    if (!urls) return null;
+    const raw = urls['2'] || urls['4'] || urls['1'];
+    if (!raw) return null;
+    // FFZ returns protocol-relative URLs ("//cdn.frankerfacez.com/...")
+    return raw.startsWith('//') ? 'https:' + raw : raw;
+  }
+
+  async function load7TV(broadcasterId) {
+    try {
+      const r = await fetch('https://7tv.io/v3/emote-sets/global');
+      if (r.ok) {
+        const data = await r.json();
+        for (const e of (data.emotes || [])) {
+          registerTpe(e.name, `https://cdn.7tv.app/emote/${e.id}/2x.webp`, '7TV');
+        }
+      }
+    } catch (_) {}
+    try {
+      const r = await fetch(`https://7tv.io/v3/users/twitch/${broadcasterId}`);
+      if (r.ok) {
+        const data = await r.json();
+        const emotes = (data.emote_set && data.emote_set.emotes) || [];
+        for (const e of emotes) {
+          registerTpe(e.name, `https://cdn.7tv.app/emote/${e.id}/2x.webp`, '7TV');
+        }
+      }
+    } catch (_) {}
+  }
+
+  function registerTpe(name, url, provider) {
+    if (!name || !isSafeEmoteUrl(url)) return;
+    // Channel emotes loaded later in time override globals if the name collides;
+    // that matches how Twitch chat tools generally behave.
+    thirdPartyEmotes.set(name, { url, provider });
   }
 
   function escapeHtml(s) {
@@ -275,35 +593,77 @@
 
   function handlePrivmsg(msg) {
     const tags = msg.tags;
-    const channel = msg.params[0];
     let text = msg.params[1] || '';
 
-    // /me action: ACTION text
+    // CTCP /me action wrapper: \u0001ACTION text\u0001
     let isAction = false;
-    if (text.startsWith('ACTION ') && text.endsWith('')) {
+    if (text.charCodeAt(0) === 1 && text.charCodeAt(text.length - 1) === 1) {
       isAction = true;
-      text = text.slice(8, -1);
+      text = text.slice(8, -1); // strip leading '\u0001ACTION ' and trailing '\u0001'
     }
 
     const username = tags['display-name'] || (msg.prefix && msg.prefix.split('!')[0]) || 'unknown';
+    const userLower = ((msg.prefix && msg.prefix.split('!')[0]) || username).toLowerCase();
     const rawColor = tags['color'];
-    // Only trust strict #RRGGBB. Defense-in-depth against CSS injection via the
-    // style attribute if the color tag ever arrives malformed.
     const color = (rawColor && /^#[0-9A-Fa-f]{6}$/.test(rawColor))
       ? rawColor
-      : fallbackColor(username.toLowerCase());
+      : fallbackColor(userLower);
+
+    const isFirstMsg = tags['first-msg'] === '1';
+    const bits = parseInt(tags['bits'], 10);
+    const isCheer = Number.isFinite(bits) && bits > 0;
 
     const div = document.createElement('div');
-    div.className = 'msg' + (isAction ? ' action' : '');
+    let cls = 'msg';
+    if (isAction) cls += ' action';
+    if (isFirstMsg) cls += ' first-msg';
+    if (isCheer) cls += ' cheer';
+    div.className = cls;
+    div.dataset.user = userLower;
 
     const badgesHtml = renderBadges(tags['badges']);
     const messageHtml = renderMessageWithEmotes(text, tags['emotes']);
+    const timeHtml = `<span class="timestamp">${formatTime()}</span>`;
+    const bitsHtml = isCheer ? `<span class="bits-tag">${bits} bits</span>` : '';
 
     div.innerHTML =
+      timeHtml +
+      bitsHtml +
       badgesHtml +
       `<span class="name" style="color:${escapeHtml(color)}">${escapeHtml(username)}</span> ` +
       `<span class="text"${isAction ? ` style="color:${escapeHtml(color)}"` : ''}>${messageHtml}</span>`;
 
+    appendMessage(div);
+  }
+
+  // ---- Event cards (USERNOTICE) ----
+  const EVENT_ICONS = {
+    sub: '★', resub: '★', subgift: '🎁', submysterygift: '🎁',
+    anonsubgift: '🎁', anongiftpaidupgrade: '🎁', giftpaidupgrade: '🎁',
+    primepaidupgrade: '★', raid: '⚔', unraid: '⚔',
+    announcement: '📢', ritual: '✨', bitsbadgetier: '💎',
+  };
+
+  function handleUserNotice(msg) {
+    const tags = msg.tags || {};
+    const msgId = tags['msg-id'] || 'unknown';
+    const systemMsg = tags['system-msg'] || '';
+    const userMsg = msg.params[1] || '';
+
+    const div = document.createElement('div');
+    const safeMsgId = msgId.replace(/[^a-z0-9_-]/gi, '');
+    div.className = `msg event-card event-${safeMsgId}`;
+    if (tags['login']) div.dataset.user = tags['login'].toLowerCase();
+
+    const icon = EVENT_ICONS[msgId] || '★';
+    const timeHtml = `<span class="timestamp">${formatTime()}</span>`;
+    let html = timeHtml +
+      `<span class="event-icon">${icon}</span>` +
+      `<span class="event-text">${escapeHtml(systemMsg)}</span>`;
+    if (userMsg) {
+      html += `<div class="event-user-msg">${renderMessageWithEmotes(userMsg, tags['emotes'])}</div>`;
+    }
+    div.innerHTML = html;
     appendMessage(div);
   }
 
@@ -402,9 +762,16 @@
         addSystemMessage(`Notice: ${msg.params[1] || raw}`);
         break;
       case 'USERNOTICE':
-        // Subs, raids, etc.
-        if (msg.tags && msg.tags['system-msg']) {
-          addSystemMessage(msg.tags['system-msg']);
+        // Subs, gift subs, raids, announcements, etc. — render as event cards.
+        handleUserNotice(msg);
+        break;
+      case 'ROOMSTATE':
+        // First ROOMSTATE on join carries `room-id` (broadcaster's Twitch user id).
+        // We need this for BTTV/7TV channel emotes and channel-specific badges.
+        if (msg.tags && msg.tags['room-id'] && msg.tags['room-id'] !== roomId) {
+          roomId = msg.tags['room-id'];
+          loadThirdPartyEmotes(currentChannel, roomId);
+          if (!document.body.classList.contains('hide-badges')) loadBadges(roomId);
         }
         break;
       case 'RECONNECT':
@@ -419,6 +786,9 @@
     if (ws) ws.close();
     ws = null;
     currentChannel = null;
+    roomId = null;
+    thirdPartyEmotes.clear();
+    badgeImages.clear();
   }
 
   // ---- UI handlers ----
