@@ -4,20 +4,66 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Twitch Chat Monitor</title>
-<link rel="stylesheet" href="style.css" />
+<link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <header>
-    <h1>Chat Monitor</h1>
+    <div class="menu-wrapper">
+      <button id="settings-btn" class="secondary" aria-haspopup="true" aria-expanded="false" aria-label="Settings">☰</button>
+      <div id="settings-menu" hidden role="menu">
+        <div class="menu-section">
+          <div class="menu-section-title">Display</div>
+          <div class="menu-row">
+            <button id="timestamps-btn" class="secondary" title="Show timestamps">Timestamps</button>
+            <button id="badges-btn" class="secondary" title="Show user badges (mod, sub, VIP, etc.)">Badges</button>
+          </div>
+          <div class="menu-row">
+            <button id="invert-btn" class="secondary" title="Invert chat direction (newest on top)">Invert</button>
+            <button id="teleprompter-btn" class="secondary" title="Toggle teleprompter mode (mirror display)">Teleprompter</button>
+          </div>
+        </div>
+        <div class="menu-section">
+          <div class="menu-section-title">Font</div>
+          <select id="font-family-select" class="menu-select" aria-label="Chat font">
+            <option value="gotham">Gotham Bold (default)</option>
+            <option value="arial-black">Arial Black</option>
+            <option value="impact">Impact</option>
+            <option value="verdana">Verdana</option>
+            <option value="tahoma">Tahoma</option>
+            <option value="trebuchet">Trebuchet MS</option>
+            <option value="georgia">Georgia</option>
+            <option value="consolas">Consolas (mono)</option>
+            <option value="courier">Courier New (mono)</option>
+            <option value="system">System default</option>
+          </select>
+        </div>
+        <div class="menu-section">
+          <div class="menu-section-title">Font size</div>
+          <div class="font-size-row">
+            <button id="font-dec" class="secondary" title="Decrease chat font size" aria-label="Decrease font size">−</button>
+            <span class="font-label">A</span>
+            <button id="font-inc" class="secondary" title="Increase chat font size" aria-label="Increase font size">+</button>
+          </div>
+        </div>
+        <div class="menu-section">
+          <div class="menu-section-title">Actions</div>
+          <div class="menu-row">
+            <button id="pause-btn" class="secondary" title="Pause / resume auto-scroll">Pause</button>
+            <button id="clear-btn" class="secondary" title="Clear chat">Clear</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <h1>Chat Monitor <span class="version">v0.11.0</span> <span class="credit">by <a href="https://www.twitch.tv/terovr" target="_blank" rel="noopener noreferrer">Terovr</a></span></h1>
     <span id="status"><span class="dot"></span><span id="status-text">Disconnected</span></span>
     <input type="text" id="channel-input" placeholder="Twitch channel name" autocomplete="off" spellcheck="false" />
     <button id="connect-btn">Connect</button>
     <button id="disconnect-btn" class="secondary" style="display:none">Disconnect</button>
-    <button id="font-dec" class="secondary" title="Decrease chat font size">A-</button>
-    <button id="font-inc" class="secondary" title="Increase chat font size">A+</button>
-    <button id="invert-btn" class="secondary" title="Invert chat direction (newest on top)">Invert</button>
-    <button id="teleprompter-btn" class="secondary" title="Toggle teleprompter mode (mirror display)">Teleprompter</button>
   </header>
+  <div id="filter-banner" hidden>
+    Showing only messages from <strong id="filter-user"></strong>
+    <button id="filter-clear" class="secondary">Clear filter</button>
+  </div>
   <div id="chat-wrapper">
     <div id="chat"></div>
     <div id="pause-indicator">Scroll paused — click to resume</div>
