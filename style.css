@@ -375,6 +375,7 @@
   #pronouns-btn.active,
   #hide-bots-btn.active,
   #hide-system-btn.active,
+  #hide-commands-btn.active,
   #link-previews-btn.active,
   #fade-idle-btn.active,
   #auto-reconnect-btn.active {
@@ -509,6 +510,7 @@
   body.hide-badges .msg .badge { display: none; }
   body.hide-bots .msg.bot-msg { display: none; }
   body.hide-system .msg.system { display: none; }
+  body.hide-commands .msg.command-msg { display: none; }
 
   /* Menu input + label (keyword highlight field) */
   #settings-menu .menu-label {
@@ -744,6 +746,10 @@
 
   /* User-filter mode hides non-matching messages */
   .msg.filter-hidden { display: none; }
+
+  /* Per-user exclusion list (Settings → Filter → Exclude users). Always-on
+     hide for messages whose author is in the list. */
+  .msg.user-excluded { display: none; }
 
   /* Empty state — shown only while #chat has no children. Uses :has() so we
      don't need any JS to hide/show it. Falls back to "always visible" on
