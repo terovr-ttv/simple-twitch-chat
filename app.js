@@ -20,6 +20,9 @@
   const PRONOUNS_KEY = 'twitch-chat-monitor-pronouns';
   const KEYWORDS_KEY = 'twitch-chat-monitor-keywords';
   const LINK_PREVIEWS_KEY = 'twitch-chat-monitor-link-previews';
+  const FADE_IDLE_KEY = 'twitch-chat-monitor-fade-idle';
+  const FADE_IDLE_SECONDS_KEY = 'twitch-chat-monitor-fade-idle-seconds';
+  const FADE_IDLE_DEFAULT_SECONDS = 30;
 
   // Common Twitch chat bots — visible-by-default since some channels rely on
   // these for context, but easy to silence via Settings → Filter.
@@ -78,6 +81,8 @@
   const keywordInput = document.getElementById('keyword-input');
   const channelStateEl = document.getElementById('channel-state');
   const linkPreviewsBtn = document.getElementById('link-previews-btn');
+  const fadeIdleBtn = document.getElementById('fade-idle-btn');
+  const fadeIdleSecondsInput = document.getElementById('fade-idle-seconds');
 
   // Settings popover toggle. Open/close via the gear button; click outside closes.
   function setSettingsOpen(open) {
@@ -173,6 +178,12 @@
   }
 
   function appendMessage(node) {
+    // If chat is mid-fade or already faded, wipe the stale (invisible) messages
+    // first so the viewer only ever sees fresh activity after a silence.
+    if (fadeIdleEnabled && chat.classList.contains('fading-out')) {
+      chat.classList.remove('fading-out');
+      chat.innerHTML = '';
+    }
     // Apply active user filter at insertion time so the DOM stays consistent.
     if (userFilter) {
       const u = node.dataset && node.dataset.user;
@@ -190,6 +201,7 @@
       }
     }
     if (autoScroll) scrollToNewest();
+    scheduleFadeOut();
   }
 
   function formatTime(date) {
@@ -269,6 +281,7 @@
   // Clear chat button
   clearBtn.addEventListener('click', () => {
     chat.innerHTML = '';
+    resetFadeState();
   });
 
   // Timestamps toggle
@@ -364,6 +377,53 @@
     linkPreviewsBtn.classList.toggle('active', linkPreviewsEnabled);
     localStorage.setItem(LINK_PREVIEWS_KEY, linkPreviewsEnabled ? '1' : '0');
   });
+
+  // Fade-idle: after N seconds of silence, fade the chat to opacity 0. When
+  // the next message arrives, clear the (now invisible) old messages so only
+  // fresh activity is visible. Off by default; configurable timeout.
+  let fadeIdleEnabled = localStorage.getItem(FADE_IDLE_KEY) === '1';
+  let fadeIdleSeconds = parseInt(localStorage.getItem(FADE_IDLE_SECONDS_KEY), 10);
+  if (!Number.isFinite(fadeIdleSeconds) || fadeIdleSeconds < 5) {
+    fadeIdleSeconds = FADE_IDLE_DEFAULT_SECONDS;
+  }
+  fadeIdleSecondsInput.value = String(fadeIdleSeconds);
+  if (fadeIdleEnabled) fadeIdleBtn.classList.add('active');
+  let fadeIdleTimer = null;
+
+  fadeIdleBtn.addEventListener('click', () => {
+    fadeIdleEnabled = !fadeIdleEnabled;
+    fadeIdleBtn.classList.toggle('active', fadeIdleEnabled);
+    localStorage.setItem(FADE_IDLE_KEY, fadeIdleEnabled ? '1' : '0');
+    if (fadeIdleEnabled) {
+      scheduleFadeOut();
+    } else {
+      resetFadeState();
+    }
+  });
+
+  fadeIdleSecondsInput.addEventListener('change', () => {
+    let n = parseInt(fadeIdleSecondsInput.value, 10);
+    if (!Number.isFinite(n)) n = FADE_IDLE_DEFAULT_SECONDS;
+    n = Math.max(5, Math.min(600, n));
+    fadeIdleSeconds = n;
+    fadeIdleSecondsInput.value = String(n);
+    localStorage.setItem(FADE_IDLE_SECONDS_KEY, String(n));
+    if (fadeIdleEnabled) scheduleFadeOut(); // restart timer with new duration
+  });
+
+  function scheduleFadeOut() {
+    clearTimeout(fadeIdleTimer);
+    if (!fadeIdleEnabled) return;
+    fadeIdleTimer = setTimeout(() => {
+      chat.classList.add('fading-out');
+    }, fadeIdleSeconds * 1000);
+  }
+
+  function resetFadeState() {
+    clearTimeout(fadeIdleTimer);
+    fadeIdleTimer = null;
+    chat.classList.remove('fading-out');
+  }
 
   // Keyword highlight input — comma-separated; persists immediately
   keywords = parseKeywords(localStorage.getItem(KEYWORDS_KEY) || '');
@@ -1004,6 +1064,16 @@
     const isBot = BOT_USERNAMES.has(userLower);
     const isHighlight = matchesKeyword(text, userLower);
 
+    // Twitch Power-ups (Bits-purchased message enhancements):
+    //   - Gigantify an Emote → msg-id=gigantified-emote-message
+    //   - Message Effects     → animation-id=<effect-name>
+    // These tag names are observed in IRC traffic but aren't in the officially
+    // documented IRC reference, so treat them as best-effort.
+    const isGigantified = tags['msg-id'] === 'gigantified-emote-message';
+    const animationId = tags['animation-id'];
+    const hasMessageEffect = !!animationId && animationId.length > 0;
+    const isPowerUp = isGigantified || hasMessageEffect;
+
     const div = document.createElement('div');
     let cls = 'msg';
     if (isAction) cls += ' action';
@@ -1011,8 +1081,12 @@
     if (isCheer) cls += ' cheer';
     if (isBot) cls += ' bot-msg';
     if (isHighlight) cls += ' highlight';
+    if (isPowerUp) cls += ' power-up';
     div.className = cls;
     div.dataset.user = userLower;
+    if (hasMessageEffect && /^[a-z0-9_-]+$/i.test(animationId)) {
+      div.dataset.effect = animationId.toLowerCase();
+    }
 
     const badgesHtml = renderBadges(tags['badges']);
     const pronounsHtml = renderPronounChip(userLower);
@@ -1030,7 +1104,14 @@
       `<span class="name" style="color:${escapeHtml(color)}">${escapeHtml(username)}</span> ` +
       `<span class="text"${isAction ? ` style="color:${escapeHtml(color)}"` : ''}>${messageHtml}</span>`;
 
-    applyBigEmotesIfApplicable(div);
+    if (isGigantified) {
+      // Gigantify a Power-up forces the indicated emote(s) huge regardless of
+      // whether the message has surrounding text — so we skip the "emote-only"
+      // check and apply the treatment directly.
+      forceBigEmotes(div);
+    } else {
+      applyBigEmotesIfApplicable(div);
+    }
     attachLinkPreviews(div, text);
     appendMessage(div);
 
@@ -1075,8 +1156,6 @@
   // Big-emote treatment: if the rendered message body contains only 1-3 emote
   // images and no other meaningful content (no text, no links), display the
   // emotes large — same behavior as iOS Messages with emoji-only messages.
-  // Also swaps each emote's src to its highest-resolution CDN variant so big
-  // emotes stay crisp instead of upscaling a thumbnail.
   function applyBigEmotesIfApplicable(msgDiv) {
     const textSpan = msgDiv.querySelector('.text');
     if (!textSpan) return;
@@ -1087,9 +1166,15 @@
     // textContent ignores <img> alt text, so any remaining whitespace-only
     // string here means the message is genuinely just emotes.
     if (textSpan.textContent.replace(/\s+/g, '') !== '') return;
+    forceBigEmotes(msgDiv);
+  }
+
+  // Unconditionally apply big-emote rendering: add the class and swap each
+  // emote's src to its highest-resolution CDN variant. Called by the auto
+  // detector above and by the Gigantify Power-up path.
+  function forceBigEmotes(msgDiv) {
     msgDiv.classList.add('big-emotes');
-    // Upgrade each emote to its high-res variant. Happens before the message
-    // is inserted into the DOM, so there's no visible flicker.
+    const emotes = msgDiv.querySelectorAll('img.emote');
     for (const img of emotes) {
       const upscaled = upscaleEmoteUrl(img.src);
       if (upscaled !== img.src) img.src = upscaled;
@@ -1289,6 +1374,7 @@
     badgeImages.clear();
     roomStateTags = {};
     renderChannelState();
+    resetFadeState();
   }
 
   // ---- UI handlers ----
