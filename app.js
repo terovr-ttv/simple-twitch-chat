@@ -667,11 +667,6 @@
     if (/^https?:\/\/clips\.twitch\.tv\/[A-Za-z0-9_-]+/i.test(url)) return 'twitch-clip';
     if (/^https?:\/\/(?:www\.)?twitch\.tv\/\w+\/clip\/[A-Za-z0-9_-]+/i.test(url)) return 'twitch-clip';
     if (/^https?:\/\/(?:www\.)?twitch\.tv\/videos\/[0-9]+/i.test(url)) return 'twitch-vod';
-    // Klipy (the new GIF service Discord added alongside Giphy). Their public
-    // URL structure and any no-auth media endpoints aren't fully stable yet,
-    // so we just render a recognizable pill for now. Upgrade to inline GIFs
-    // when their API/CDN pattern is confirmed.
-    if (/^https?:\/\/(?:www\.)?klipy\.(?:com|co)\/[^\s]+/i.test(url)) return 'klipy';
     return null;
   }
 
@@ -693,11 +688,104 @@
       case 'video':       return videoPreview(url);
       case 'giphy':       return giphyPreview(extractGiphyId(url), url);
       case 'youtube':     return youtubePreview(extractYouTubeId(url), url);
-      case 'twitch-clip': return twitchPillPreview(url, '🎬 Twitch Clip');
+      case 'twitch-clip': return twitchClipPreview(url);
       case 'twitch-vod':  return twitchPillPreview(url, '▶ Twitch VOD');
-      case 'klipy':       return twitchPillPreview(url, '🎞️ Klipy GIF');
       default:            return null;
     }
+  }
+
+  function extractTwitchClipSlug(url) {
+    let m = url.match(/^https?:\/\/clips\.twitch\.tv\/([A-Za-z0-9_-]+)/i);
+    if (m) return m[1];
+    m = url.match(/^https?:\/\/(?:www\.)?twitch\.tv\/\w+\/clip\/([A-Za-z0-9_-]+)/i);
+    return m ? m[1] : null;
+  }
+
+  // Twitch's public GraphQL endpoint accepts read-only queries for public data
+  // when sent with the well-known web client ID. No OAuth needed. We use this
+  // to fetch a clip's thumbnail URL and title, then render a YouTube-style
+  // card. If the GQL call fails (CORS, rate limit, endpoint change, etc.) the
+  // placeholder pill stays as a clickable fallback.
+  const TWITCH_GQL_CLIENT_ID = 'kimne78kx3ncx6brgo4mv6wki5h1ko';
+
+  function twitchClipPreview(url) {
+    const slug = extractTwitchClipSlug(url);
+    if (!slug || !/^[A-Za-z0-9_-]+$/.test(slug)) return null;
+
+    // Immediate pill placeholder — upgrades to a thumbnail card on GQL success.
+    const card = twitchPillPreview(url, '🎬 Twitch Clip (loading…)');
+
+    fetchTwitchClipMeta(slug).then(clip => {
+      if (!clip || !clip.thumbnailURL) {
+        revertTwitchClipPill(card, url);
+        return;
+      }
+      upgradeTwitchClipCard(card, url, clip);
+    }).catch(() => revertTwitchClipPill(card, url));
+
+    return card;
+  }
+
+  async function fetchTwitchClipMeta(slug) {
+    try {
+      const r = await fetch('https://gql.twitch.tv/gql', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Client-Id': TWITCH_GQL_CLIENT_ID,
+        },
+        body: JSON.stringify({
+          operationName: 'ClipsPreview',
+          query: 'query ClipsPreview($slug: ID!) { clip(slug: $slug) { thumbnailURL(width: 480, height: 272) title broadcaster { displayName } durationSeconds } }',
+          variables: { slug },
+        }),
+      });
+      if (!r.ok) return null;
+      const data = await r.json();
+      return (data && data.data && data.data.clip) || null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function upgradeTwitchClipCard(card, originalUrl, clip) {
+    if (!isSafeEmoteUrl(clip.thumbnailURL)) {
+      revertTwitchClipPill(card, originalUrl);
+      return;
+    }
+    card.className = 'preview-card preview-twitch-clip';
+    card.innerHTML = '';
+    const a = document.createElement('a');
+    a.href = originalUrl;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.title = clip.title || 'Twitch Clip';
+    const img = document.createElement('img');
+    img.src = clip.thumbnailURL;
+    img.loading = 'lazy';
+    img.alt = clip.title || 'Twitch Clip';
+    img.referrerPolicy = 'no-referrer';
+    img.addEventListener('error', () => revertTwitchClipPill(card, originalUrl));
+    const overlay = document.createElement('div');
+    overlay.className = 'preview-overlay';
+    const broadcaster = clip.broadcaster && clip.broadcaster.displayName;
+    overlay.innerHTML =
+      '<span class="preview-icon">▶</span>' +
+      `<span class="preview-label">${escapeHtml(broadcaster ? `${broadcaster} · Twitch Clip` : 'Twitch Clip')}</span>`;
+    a.appendChild(img);
+    a.appendChild(overlay);
+    card.appendChild(a);
+  }
+
+  function revertTwitchClipPill(card, originalUrl) {
+    card.className = 'preview-card preview-pill';
+    card.innerHTML = '';
+    const a = document.createElement('a');
+    a.href = originalUrl;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.textContent = '🎬 Twitch Clip';
+    card.appendChild(a);
   }
 
   function extractGiphyId(url) {
