@@ -302,14 +302,21 @@
     }
   });
 
-  // Overlay mode (for OBS browser source)
+  // Overlay mode (for OBS browser source).
+  // Toggle the class on BOTH <html> and <body> — OBS composites against the
+  // html element so leaving its background opaque shows up as a dark rectangle
+  // even when body is transparent.
+  function setOverlayMode(on) {
+    document.documentElement.classList.toggle('overlay-mode', on);
+    document.body.classList.toggle('overlay-mode', on);
+    overlayBtn.classList.toggle('active', on);
+  }
   if (localStorage.getItem(OVERLAY_KEY) === '1') {
-    document.body.classList.add('overlay-mode');
-    overlayBtn.classList.add('active');
+    setOverlayMode(true);
   }
   overlayBtn.addEventListener('click', () => {
-    const on = document.body.classList.toggle('overlay-mode');
-    overlayBtn.classList.toggle('active', on);
+    const on = !document.body.classList.contains('overlay-mode');
+    setOverlayMode(on);
     localStorage.setItem(OVERLAY_KEY, on ? '1' : '0');
   });
 
