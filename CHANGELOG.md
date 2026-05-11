@@ -3,6 +3,10 @@
 All notable changes to Simple Chat Monitor.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.12] - 2026-05-11
+### Added
+- **Auto-reconnect** toggle in Settings → Display. When on (default), the page automatically connects to your last saved channel on load or refresh. A URL hash deep-link (`index.html#channel`) still takes precedence over the saved channel, so OBS browser sources with explicit channels are unaffected.
+
 ## [1.0.11] - 2026-05-11
 ### Changed
 - **Twitch clips now render as a YouTube-style thumbnail card** instead of a full iframe player. Fetches the clip's real thumbnail + title via Twitch's public GraphQL endpoint (using the well-known web client ID — same approach used by FFZ, BTTV, and other no-OAuth tools). Card shows the thumbnail with a play overlay and the broadcaster name; click opens the clip on Twitch in a new tab. Avoids the parent-validation and autoplay quirks of the embedded player.
