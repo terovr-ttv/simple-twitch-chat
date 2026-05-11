@@ -17,8 +17,10 @@
   const OVERLAY_KEY = 'twitch-chat-monitor-overlay';
   const HIDE_BOTS_KEY = 'twitch-chat-monitor-hide-bots';
   const HIDE_SYSTEM_KEY = 'twitch-chat-monitor-hide-system';
+  const HIDE_COMMANDS_KEY = 'twitch-chat-monitor-hide-commands';
   const PRONOUNS_KEY = 'twitch-chat-monitor-pronouns';
   const KEYWORDS_KEY = 'twitch-chat-monitor-keywords';
+  const EXCLUDE_USERS_KEY = 'twitch-chat-monitor-exclude-users';
   const LINK_PREVIEWS_KEY = 'twitch-chat-monitor-link-previews';
   const FADE_IDLE_KEY = 'twitch-chat-monitor-fade-idle';
   const FADE_IDLE_SECONDS_KEY = 'twitch-chat-monitor-fade-idle-seconds';
@@ -68,6 +70,7 @@
   const pronounInFlight = new Set(); // userLower currently being fetched
   let pronounsTable = null;          // id -> display string, loaded once from API
   let keywords = [];                 // lowercased keyword strings for highlight matching
+  let excludedUsers = new Set();     // lowercased usernames whose messages are hidden
 
   const filterBanner = document.getElementById('filter-banner');
   const filterUserEl = document.getElementById('filter-user');
@@ -80,7 +83,9 @@
   const pronounsBtn = document.getElementById('pronouns-btn');
   const hideBotsBtn = document.getElementById('hide-bots-btn');
   const hideSystemBtn = document.getElementById('hide-system-btn');
+  const hideCommandsBtn = document.getElementById('hide-commands-btn');
   const keywordInput = document.getElementById('keyword-input');
+  const excludeUsersInput = document.getElementById('exclude-users-input');
   const channelStateEl = document.getElementById('channel-state');
   const linkPreviewsBtn = document.getElementById('link-previews-btn');
   const fadeIdleBtn = document.getElementById('fade-idle-btn');
@@ -192,6 +197,11 @@
     if (userFilter) {
       const u = node.dataset && node.dataset.user;
       if (!u || u !== userFilter) node.classList.add('filter-hidden');
+    }
+    // Permanent per-user exclusion list (Settings → Filter → Exclude users).
+    if (excludedUsers.size > 0) {
+      const u = node.dataset && node.dataset.user;
+      if (u && excludedUsers.has(u)) node.classList.add('user-excluded');
     }
     if (reverseDirection) {
       chat.insertBefore(node, chat.firstChild);
@@ -376,6 +386,20 @@
     localStorage.setItem(HIDE_SYSTEM_KEY, on ? '1' : '0');
   });
 
+  // Hide commands toggle — silences any message whose first non-space char is
+  // "!" (the conventional Twitch bot-command prefix). Each message is tagged
+  // with .command-msg at render time, so toggling the body class shows/hides
+  // them with no re-render.
+  if (localStorage.getItem(HIDE_COMMANDS_KEY) === '1') {
+    document.body.classList.add('hide-commands');
+    hideCommandsBtn.classList.add('active');
+  }
+  hideCommandsBtn.addEventListener('click', () => {
+    const on = document.body.classList.toggle('hide-commands');
+    hideCommandsBtn.classList.toggle('active', on);
+    localStorage.setItem(HIDE_COMMANDS_KEY, on ? '1' : '0');
+  });
+
   // Pronouns toggle — off by default to keep the app connection-free out of the box.
   let pronounsEnabled = localStorage.getItem(PRONOUNS_KEY) === '1';
   if (pronounsEnabled) {
@@ -472,6 +496,32 @@
       .map(k => k.trim().toLowerCase())
       .filter(Boolean);
   }
+
+  // Per-user exclusion: validates against Twitch's username charset so a typo
+  // (e.g. trailing comma, space, punctuation) can't silently swallow a real
+  // username elsewhere in the list.
+  function parseExcludedUsers(raw) {
+    const set = new Set();
+    for (const s of raw.split(',')) {
+      const u = s.trim().toLowerCase();
+      if (/^[a-z0-9_]{1,25}$/.test(u)) set.add(u);
+    }
+    return set;
+  }
+
+  excludedUsers = parseExcludedUsers(localStorage.getItem(EXCLUDE_USERS_KEY) || '');
+  excludeUsersInput.value = localStorage.getItem(EXCLUDE_USERS_KEY) || '';
+  excludeUsersInput.addEventListener('input', () => {
+    const raw = excludeUsersInput.value;
+    excludedUsers = parseExcludedUsers(raw);
+    localStorage.setItem(EXCLUDE_USERS_KEY, raw);
+    // Retro-apply to existing messages so toggling a user on/off is instant.
+    for (const m of chat.children) {
+      const u = m.dataset && m.dataset.user;
+      m.classList.toggle('user-excluded', !!u && excludedUsers.has(u));
+    }
+    if (autoScroll) scrollToNewest();
+  });
 
   // Click a username to filter to that user; clear filter via banner button.
   chat.addEventListener('click', (e) => {
@@ -1042,10 +1092,6 @@
     if (Number.isFinite(slow) && slow > 0) out.push({ cls: 'slow', text: `Slow ${slow}s` });
     if (t['subs-only'] === '1') out.push({ cls: 'subs', text: 'Subs only' });
     if (t['emote-only'] === '1') out.push({ cls: 'emote', text: 'Emote only' });
-    const followers = parseInt(t['followers-only'], 10);
-    if (Number.isFinite(followers) && followers >= 0) {
-      out.push({ cls: 'followers', text: followers === 0 ? 'Followers only' : `Followers ${followers}m` });
-    }
     if (t.r9k === '1') out.push({ cls: 'r9k', text: 'Unique chat' });
 
     channelStateEl.innerHTML = '';
@@ -1183,6 +1229,10 @@
     const isCheer = Number.isFinite(bits) && bits > 0;
     const isBot = BOT_USERNAMES.has(userLower);
     const isHighlight = matchesKeyword(text, userLower);
+    // Chat command: message starts with "!" followed by a word char. Avoids
+    // catching plain "!" / "!!!" enthusiasm while still flagging "!discord",
+    // "!socials", "!hi", etc.
+    const isCommand = /^!\w/.test(text);
 
     // Twitch Power-ups (Bits-purchased message enhancements):
     //   - Gigantify an Emote → msg-id=gigantified-emote-message
@@ -1200,6 +1250,7 @@
     if (isFirstMsg) cls += ' first-msg';
     if (isCheer) cls += ' cheer';
     if (isBot) cls += ' bot-msg';
+    if (isCommand) cls += ' command-msg';
     if (isHighlight) cls += ' highlight';
     if (isPowerUp) cls += ' power-up';
     div.className = cls;
