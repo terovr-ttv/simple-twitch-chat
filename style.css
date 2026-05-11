@@ -650,6 +650,35 @@
     border-left: 3px solid var(--danger);
     padding-left: 6px;
   }
+
+  /* Twitch Power-up messages (Gigantify or Message Effects). Gold gradient
+     border with a subtle tint and a ⚡ marker so paid-Bit messages pop. */
+  .msg.power-up {
+    background: linear-gradient(90deg, rgba(245, 166, 35, 0.16), rgba(145, 71, 255, 0.06));
+    border-left: 3px solid #f5a623;
+    padding-left: 6px;
+    position: relative;
+  }
+  .msg.power-up::before {
+    content: "⚡";
+    display: inline-block;
+    margin-right: 4px;
+    color: #f5a623;
+    font-size: 0.95em;
+    font-weight: 700;
+    vertical-align: middle;
+    filter: drop-shadow(0 0 4px rgba(245, 166, 35, 0.6));
+  }
+  /* Slow shimmer animation on the gradient so message effects feel "alive"
+     without trying to faithfully reproduce each Twitch effect. */
+  .msg.power-up {
+    background-size: 200% 100%;
+    animation: power-up-shimmer 4s ease-in-out infinite;
+  }
+  @keyframes power-up-shimmer {
+    0%, 100% { background-position: 0% 50%; }
+    50%      { background-position: 100% 50%; }
+  }
   .msg .bits-tag {
     display: inline-block;
     background: var(--danger);
