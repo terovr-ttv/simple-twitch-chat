@@ -22,6 +22,7 @@
   const LINK_PREVIEWS_KEY = 'twitch-chat-monitor-link-previews';
   const FADE_IDLE_KEY = 'twitch-chat-monitor-fade-idle';
   const FADE_IDLE_SECONDS_KEY = 'twitch-chat-monitor-fade-idle-seconds';
+  const AUTO_RECONNECT_KEY = 'twitch-chat-monitor-auto-reconnect';
   const FADE_IDLE_DEFAULT_SECONDS = 30;
 
   // Common Twitch chat bots — visible-by-default since some channels rely on
@@ -83,6 +84,7 @@
   const linkPreviewsBtn = document.getElementById('link-previews-btn');
   const fadeIdleBtn = document.getElementById('fade-idle-btn');
   const fadeIdleSecondsInput = document.getElementById('fade-idle-seconds');
+  const autoReconnectBtn = document.getElementById('auto-reconnect-btn');
 
   // Settings popover toggle. Open/close via the gear button; click outside closes.
   function setSettingsOpen(open) {
@@ -376,6 +378,17 @@
     linkPreviewsEnabled = !linkPreviewsEnabled;
     linkPreviewsBtn.classList.toggle('active', linkPreviewsEnabled);
     localStorage.setItem(LINK_PREVIEWS_KEY, linkPreviewsEnabled ? '1' : '0');
+  });
+
+  // Auto-reconnect: on page load, reconnect to the last channel automatically.
+  // On by default since it matches user expectation; a URL hash deep-link
+  // always takes precedence over the saved channel.
+  let autoReconnectEnabled = localStorage.getItem(AUTO_RECONNECT_KEY) !== '0';
+  if (autoReconnectEnabled) autoReconnectBtn.classList.add('active');
+  autoReconnectBtn.addEventListener('click', () => {
+    autoReconnectEnabled = !autoReconnectEnabled;
+    autoReconnectBtn.classList.toggle('active', autoReconnectEnabled);
+    localStorage.setItem(AUTO_RECONNECT_KEY, autoReconnectEnabled ? '1' : '0');
   });
 
   // Fade-idle: after N seconds of silence, fade the chat to opacity 0. When
@@ -1479,15 +1492,29 @@
 
   // URL hash deep-link: #channel auto-connects on load. Useful for OBS browser
   // sources or bookmarks. The hash takes precedence over the localStorage value.
+  // Returns true when a connect was triggered, so the load handler knows
+  // whether to fall through to the saved-channel path.
   function autoConnectFromHash() {
     const hash = window.location.hash.replace(/^#/, '').trim().toLowerCase();
-    if (!hash) return;
+    if (!hash) return false;
     channelInput.value = hash;
     connectBtn.click();
+    return true;
   }
   window.addEventListener('hashchange', () => {
     disconnect();
     autoConnectFromHash();
   });
-  autoConnectFromHash();
+
+  // Initial load: try hash first; otherwise reconnect to the last saved
+  // channel if the Auto-reconnect toggle is enabled.
+  function autoConnectOnLoad() {
+    if (autoConnectFromHash()) return;
+    if (!autoReconnectEnabled) return;
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved && VALID_CHANNEL.test(saved)) {
+      connectBtn.click();
+    }
+  }
+  autoConnectOnLoad();
 })();
