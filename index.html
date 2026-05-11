@@ -21,6 +21,22 @@
             <button id="invert-btn" class="secondary" title="Invert chat direction (newest on top)">Invert</button>
             <button id="teleprompter-btn" class="secondary" title="Toggle teleprompter mode (mirror display)">Teleprompter</button>
           </div>
+          <div class="menu-row">
+            <button id="overlay-btn" class="secondary" title="Transparent overlay mode (for OBS browser source)">Overlay</button>
+            <button id="pronouns-btn" class="secondary" title="Show user pronouns (pronouns.alejo.io)">Pronouns</button>
+          </div>
+          <div class="menu-row">
+            <button id="link-previews-btn" class="secondary" title="Show inline previews for images and YouTube videos">Link previews</button>
+          </div>
+        </div>
+        <div class="menu-section">
+          <div class="menu-section-title">Filter</div>
+          <div class="menu-row">
+            <button id="hide-bots-btn" class="secondary" title="Hide common chat bots (Nightbot, StreamElements, etc.)">Hide bots</button>
+            <button id="hide-system-btn" class="secondary" title="Hide system messages (joins, timeouts, etc.)">Hide system</button>
+          </div>
+          <label class="menu-label">Highlight keywords (comma-separated)</label>
+          <input type="text" id="keyword-input" class="menu-input" placeholder="e.g. terovr, raid, vod" autocomplete="off" spellcheck="false" />
         </div>
         <div class="menu-section">
           <div class="menu-section-title">Font</div>
@@ -54,8 +70,9 @@
         </div>
       </div>
     </div>
-    <h1>Chat Monitor <span class="version">v0.11.0</span> <span class="credit">by <a href="https://www.twitch.tv/terovr" target="_blank" rel="noopener noreferrer">Terovr</a></span></h1>
+    <h1>Twitch Chat Monitor <span class="version">v1.0.0</span> <span class="credit">by <a href="https://streamelements.com/terovr/tip" target="_blank" rel="noopener noreferrer">Terovr</a></span></h1>
     <span id="status"><span class="dot"></span><span id="status-text">Disconnected</span></span>
+    <span id="channel-state" hidden></span>
     <input type="text" id="channel-input" placeholder="Twitch channel name" autocomplete="off" spellcheck="false" />
     <button id="connect-btn">Connect</button>
     <button id="disconnect-btn" class="secondary" style="display:none">Disconnect</button>
