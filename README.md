@@ -137,7 +137,7 @@ Any modern browser with WebSocket and ES2017+ support (Chrome, Firefox, Safari, 
 
 ## Version
 
-Current: **v1.0.9**. See [CHANGELOG.md](CHANGELOG.md) for the full history.
+Current: **v1.0.11**. See [CHANGELOG.md](CHANGELOG.md) for the full history.
 
 ## Credits
 
