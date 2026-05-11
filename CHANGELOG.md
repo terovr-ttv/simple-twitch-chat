@@ -3,6 +3,17 @@
 All notable changes to Simple Chat Monitor.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.11] - 2026-05-11
+### Changed
+- **Twitch clips now render as a YouTube-style thumbnail card** instead of a full iframe player. Fetches the clip's real thumbnail + title via Twitch's public GraphQL endpoint (using the well-known web client ID — same approach used by FFZ, BTTV, and other no-OAuth tools). Card shows the thumbnail with a play overlay and the broadcaster name; click opens the clip on Twitch in a new tab. Avoids the parent-validation and autoplay quirks of the embedded player.
+- If the GraphQL call fails (CORS, rate limit, endpoint change), the placeholder pill stays clickable so the link is never lost.
+
+## [1.0.10] - 2026-05-11
+### Changed
+- **Twitch clips now embed inline** as the real Twitch clip player (16:9 iframe at 360px max width). The clip's thumbnail and play button are shown — viewers can play the clip directly in chat. Built on Twitch's `clips.twitch.tv/embed` URL with `parent` set dynamically from the deployed hostname. On `file://` URLs (no hostname) it falls back to the previous pill, since Twitch refuses to render embeds without a valid parent.
+### Removed
+- **Klipy pill detection** removed. Without a reliable way to derive the direct GIF CDN URL from a Klipy page URL (their CDN uses non-derivable hashes), the pill was misleading — clicking it just opened the page anyway. Klipy URLs now render as plain linkified text. Inline support can be re-added if Klipy publishes a stable public CDN pattern or a no-auth API.
+
 ## [1.0.9] - 2026-05-11
 ### Added
 - **Twitch Power-up support** (best-effort, based on observed IRC tags):
