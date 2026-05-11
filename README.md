@@ -1,6 +1,6 @@
 # Simple Chat Monitor
 
-A zero-dependency, static web app that displays a Twitch channel's chat in real time. No OAuth, no sign-in, no build step — just open the HTML file.
+A zero-dependency, static web app that displays a Twitch channel's chat in real time. No OAuth, no sign-in, no build step.
 
 ## Features
 
