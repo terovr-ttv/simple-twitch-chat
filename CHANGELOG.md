@@ -3,6 +3,34 @@
 All notable changes to Simple Chat Monitor.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.4] - 2026-05-11
+### Added
+- **Empty state** in the chat panel — shown before any messages arrive. Welcome card with a hint about the no-OAuth nature of the tool. Auto-hides via CSS `:has()` the moment any message lands, no JS needed. Suppressed entirely in overlay mode.
+- **Klipy URL detection** — `klipy.com` GIF links now render as a styled `🎞️ Klipy GIF` pill (same treatment as Twitch clips). URL is stripped from the message text. Inline GIF rendering can be added later once Klipy's public CDN pattern is confirmed.
+### Changed
+- **Friendlier connection error messages**:
+  - First connection failure: "Can't reach Twitch — check your internet" (instead of generic "Connection error").
+  - Subsequent reconnect attempts give a clearer reason and mention the channel name might be invalid after a couple of retries.
+  - JOIN success now says "Joined #channel — waiting for chat activity…" so a quiet channel doesn't look broken.
+
+## [1.0.3] - 2026-05-11
+### Removed
+- **Tenor GIF preview support** removed entirely. Google has announced the Tenor API is being sunset on 2025-06-30, so the integration would have stopped working anyway. Tenor links in chat now render as plain linkified URLs again. The CONFIG block at the top of `app.js` has been removed since it had no remaining keys to hold.
+
+## [1.0.2] - 2026-05-11
+### Added
+- **Tenor GIF previews** — page URLs (`tenor.com/view/...`) now render inline GIFs when a Tenor API key is configured in the new CONFIG block at the top of `app.js`. Renders an immediate pill placeholder, then upgrades to the GIF when the API responds. If no key is set, or the call fails, the pill stays as a clickable Tenor link — no broken state.
+- **CONFIG block** at the top of `app.js` for optional API keys (currently Tenor). Clearly marked, with a security note explaining that client-side keys are visible in the deployed source.
+### Changed
+- **Media URLs are now removed from the visible message text** when they produce a preview card. So an image/gif/video/YouTube/Twitch/Tenor link shows just the embed — no duplicate URL. Generic article links keep their linkified text. Adjacent whitespace is cleaned up so messages don't end up with double spaces.
+
+## [1.0.1] - 2026-05-11
+### Added
+- **Giphy page-URL support** — links like `giphy.com/gifs/funny-cat-XYZabc123` (and `/stickers/...`) are now turned into inline GIF previews by deriving the CDN URL from the trailing ID in the slug. No API key needed.
+- **Inline video preview** for direct `.mp4` and `.webm` URLs (Discord CDN clips, Imgur `.mp4`) — autoplay, muted, looped, click-to-open in a new tab.
+### Fixed
+- OBS overlay mode now actually goes transparent. Previously only `<body>` was flipped to transparent, leaving `<html>` opaque — which OBS draws against, so a dark rectangle stayed on top of the scene. Both elements are now toggled in lockstep.
+
 ## [1.0.0] - 2026-05-11
 First feature-complete release. Marks the transition out of pre-1.0; the feature surface is intentionally frozen here so the project stays maintainable.
 
