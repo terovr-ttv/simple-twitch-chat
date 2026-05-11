@@ -376,7 +376,8 @@
   #hide-bots-btn.active,
   #hide-system-btn.active,
   #link-previews-btn.active,
-  #fade-idle-btn.active {
+  #fade-idle-btn.active,
+  #auto-reconnect-btn.active {
     background: var(--accent);
     color: white;
     border-color: var(--accent);
