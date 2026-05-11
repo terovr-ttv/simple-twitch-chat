@@ -532,19 +532,33 @@
     // Split on whitespace but preserve it so spacing stays intact.
     const parts = text.split(/(\s+)/);
     let out = '';
+    let pendingWs = '';   // whitespace held back; emitted only when followed by content
     for (const part of parts) {
       if (!part) continue;
-      if (/^\s+$/.test(part)) { out += escapeHtml(part); continue; }
+      if (/^\s+$/.test(part)) { pendingWs += part; continue; }
       const tpe = thirdPartyEmotes.get(part);
       if (tpe && isSafeEmoteUrl(tpe.url)) {
+        out += escapeHtml(pendingWs);
+        pendingWs = '';
         out += `<img class="emote tpe" src="${escapeHtml(tpe.url)}" alt="${escapeHtml(part)}" title="${escapeHtml(part)} (${tpe.provider})" />`;
       } else if (looksLikeUrl(part)) {
-        const safe = escapeHtml(part);
-        out += `<a class="msg-link" href="${safe}" target="_blank" rel="noopener noreferrer">${safe}</a>`;
+        if (urlWillPreview(part)) {
+          // URL will render as a media/pill card below; drop the visible link
+          // AND the whitespace that led up to it so we don't leave double-spaces.
+          pendingWs = '';
+        } else {
+          out += escapeHtml(pendingWs);
+          pendingWs = '';
+          const safe = escapeHtml(part);
+          out += `<a class="msg-link" href="${safe}" target="_blank" rel="noopener noreferrer">${safe}</a>`;
+        }
       } else {
+        out += escapeHtml(pendingWs);
+        pendingWs = '';
         out += escapeHtml(part);
       }
     }
+    // Trailing whitespace only matters when followed by content; safe to drop.
     return out;
   }
 
@@ -582,23 +596,94 @@
     }
   }
 
-  function buildPreviewCard(url) {
-    // Direct image
-    if (/\.(jpe?g|png|gif|webp|bmp|avif)(\?[^"\s]*)?$/i.test(url)) {
-      return imagePreview(url);
-    }
-    // YouTube
-    const yt = url.match(/^https?:\/\/(?:www\.)?(?:youtu\.be\/|youtube\.com\/(?:watch\?[\w=&-]*v=|embed\/|shorts\/|live\/))([A-Za-z0-9_-]{6,15})/i);
-    if (yt) return youtubePreview(yt[1], url);
-    // Twitch clip
-    const tc = url.match(/^https?:\/\/clips\.twitch\.tv\/([A-Za-z0-9_-]+)/i)
-            || url.match(/^https?:\/\/(?:www\.)?twitch\.tv\/\w+\/clip\/([A-Za-z0-9_-]+)/i);
-    if (tc) return twitchPillPreview(url, '🎬 Twitch Clip');
-    // Twitch VOD / channel
-    const tv = url.match(/^https?:\/\/(?:www\.)?twitch\.tv\/videos\/([0-9]+)/i);
-    if (tv) return twitchPillPreview(url, '▶ Twitch VOD');
+  // Classify a URL into a preview type. Returns null for generic article-style
+  // URLs (which stay linkified in the message text). Centralised so the text
+  // renderer can ask "will this URL become a preview?" using the same logic.
+  function classifyUrl(url) {
+    if (/\.(jpe?g|png|gif|webp|bmp|avif)(\?[^"\s]*)?$/i.test(url)) return 'image';
+    if (/\.(mp4|webm)(\?[^"\s]*)?$/i.test(url)) return 'video';
+    if (extractGiphyId(url)) return 'giphy';
+    if (extractYouTubeId(url)) return 'youtube';
+    if (/^https?:\/\/clips\.twitch\.tv\/[A-Za-z0-9_-]+/i.test(url)) return 'twitch-clip';
+    if (/^https?:\/\/(?:www\.)?twitch\.tv\/\w+\/clip\/[A-Za-z0-9_-]+/i.test(url)) return 'twitch-clip';
+    if (/^https?:\/\/(?:www\.)?twitch\.tv\/videos\/[0-9]+/i.test(url)) return 'twitch-vod';
+    // Klipy (the new GIF service Discord added alongside Giphy). Their public
+    // URL structure and any no-auth media endpoints aren't fully stable yet,
+    // so we just render a recognizable pill for now. Upgrade to inline GIFs
+    // when their API/CDN pattern is confirmed.
+    if (/^https?:\/\/(?:www\.)?klipy\.(?:com|co)\/[^\s]+/i.test(url)) return 'klipy';
     return null;
   }
+
+  // Used by renderTextSegment: if true, the URL is dropped from the message
+  // text because a preview card will render below it.
+  function urlWillPreview(url) {
+    return linkPreviewsEnabled && classifyUrl(url) !== null;
+  }
+
+  function extractYouTubeId(url) {
+    const m = url.match(/^https?:\/\/(?:www\.)?(?:youtu\.be\/|youtube\.com\/(?:watch\?[\w=&-]*v=|embed\/|shorts\/|live\/))([A-Za-z0-9_-]{6,15})/i);
+    return m ? m[1] : null;
+  }
+
+  function buildPreviewCard(url) {
+    const type = classifyUrl(url);
+    switch (type) {
+      case 'image':       return imagePreview(url);
+      case 'video':       return videoPreview(url);
+      case 'giphy':       return giphyPreview(extractGiphyId(url), url);
+      case 'youtube':     return youtubePreview(extractYouTubeId(url), url);
+      case 'twitch-clip': return twitchPillPreview(url, '🎬 Twitch Clip');
+      case 'twitch-vod':  return twitchPillPreview(url, '▶ Twitch VOD');
+      case 'klipy':       return twitchPillPreview(url, '🎞️ Klipy GIF');
+      default:            return null;
+    }
+  }
+
+  function extractGiphyId(url) {
+    // Match Giphy page URLs: giphy.com/gifs/<slug-with-id>  or  /stickers/<slug-with-id>
+    // The trailing alphanumeric segment of the slug is the same ID used on the CDN.
+    const m = url.match(/^https?:\/\/(?:www\.)?giphy\.com\/(?:gifs|stickers)\/([^/?#]+)/i);
+    if (!m) return null;
+    const idMatch = m[1].match(/([A-Za-z0-9]{8,30})$/);
+    return idMatch ? idMatch[1] : null;
+  }
+
+  function giphyPreview(id, originalUrl) {
+    const card = document.createElement('div');
+    card.className = 'preview-card preview-giphy';
+    const a = document.createElement('a');
+    a.href = originalUrl;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    const img = document.createElement('img');
+    img.src = `https://media.giphy.com/media/${id}/giphy.gif`;
+    img.loading = 'lazy';
+    img.alt = 'Giphy';
+    img.referrerPolicy = 'no-referrer';
+    img.addEventListener('error', () => card.remove());
+    a.appendChild(img);
+    card.appendChild(a);
+    return card;
+  }
+
+  function videoPreview(url) {
+    const card = document.createElement('div');
+    card.className = 'preview-card preview-video';
+    const video = document.createElement('video');
+    video.src = url;
+    video.autoplay = true;
+    video.muted = true;
+    video.loop = true;
+    video.playsInline = true;
+    video.preload = 'metadata';
+    video.addEventListener('error', () => card.remove());
+    card.appendChild(video);
+    // Whole card is clickable since the <video> element captures clicks itself.
+    card.addEventListener('click', () => window.open(url, '_blank', 'noopener,noreferrer'));
+    return card;
+  }
+
 
   function imagePreview(url) {
     const card = document.createElement('div');
@@ -1059,7 +1144,14 @@
     });
 
     ws.addEventListener('error', () => {
-      setStatus('error', 'Connection error');
+      // We can't get useful detail out of the Error event itself. The distinction
+      // between "Twitch is down" and "your internet is down" usually shows up
+      // as the WebSocket failing to open at all, so phrase it accordingly.
+      if (reconnectAttempts === 0) {
+        setStatus('error', 'Can’t reach Twitch — check your internet');
+      } else {
+        setStatus('error', 'Connection error');
+      }
     });
 
     ws.addEventListener('close', () => {
@@ -1073,8 +1165,13 @@
       // Auto-reconnect with backoff
       reconnectAttempts++;
       const delay = Math.min(30000, 1000 * Math.pow(2, Math.min(reconnectAttempts, 5)));
-      setStatus('error', `Connection lost. Reconnecting in ${Math.round(delay/1000)}s...`);
-      addSystemMessage(`Connection lost. Reconnecting in ${Math.round(delay/1000)}s...`);
+      const seconds = Math.round(delay / 1000);
+      // First drop is usually a transient blip; later drops suggest a real issue.
+      const reason = reconnectAttempts <= 2
+        ? 'Lost connection to Twitch'
+        : `Still trying to reconnect (attempt ${reconnectAttempts}). Twitch chat may be down, or this channel name might be invalid.`;
+      setStatus('error', `${reason} — retrying in ${seconds}s`);
+      addSystemMessage(`${reason} — retrying in ${seconds}s…`);
       setTimeout(() => {
         if (!intentionalClose && currentChannel) connect(currentChannel);
       }, delay);
@@ -1091,7 +1188,7 @@
       case 'JOIN':
         if (msg.prefix && msg.prefix.startsWith('justinfan')) {
           setStatus('connected', `Connected to #${currentChannel}`);
-          addSystemMessage(`Joined #${currentChannel}`);
+          addSystemMessage(`Joined #${currentChannel} — waiting for chat activity…`);
           reconnectAttempts = 0;
         }
         break;
