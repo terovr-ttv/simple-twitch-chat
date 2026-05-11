@@ -3,6 +3,34 @@
 All notable changes to Simple Chat Monitor.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.0] - 2026-05-11
+First feature-complete release. Marks the transition out of pre-1.0; the feature surface is intentionally frozen here so the project stays maintainable.
+
+### Added
+- **Reply threading display** — when a viewer uses Twitch's Reply feature, the parent author and a preview of the parent message render as a quoted line above the new message (driven by `reply-parent-display-name` / `reply-parent-msg-body` IRC tags).
+### Changed
+- README rewritten for discoverability — added use-cases table, OBS-overlay walkthrough, teleprompter walkthrough, privacy section, and keyword tail for search engines.
+
+## [0.13.0] - 2026-05-11
+### Added
+- **Clickable links** — URLs in chat messages are now linkified and open in a new tab.
+- **Inline link previews** (client-side, no backend scraping):
+  - Direct image URLs (jpg/png/gif/webp/bmp/avif) → inline thumbnail card.
+  - YouTube videos (regular, shorts, live) → thumbnail card with play overlay, fetched from the public `img.youtube.com` CDN.
+  - Twitch clips and VODs → styled pill links.
+- **Link previews toggle** in Settings → Display, on by default.
+### Changed
+- Keyword highlight no longer matches inside URL bodies — prevents false positives like "raid" matching inside `example.com/raid`.
+
+## [0.12.0] - 2026-05-11
+### Added
+- **Transparent overlay mode** for OBS browser source use — page bg goes transparent, chat text gets a heavy shadow for legibility over video, header fades and lights up on hover so settings stay accessible.
+- **Hide bots** toggle — hides messages from common chat bots (Nightbot, StreamElements, Moobot, Streamlabs, Fossabot, etc.).
+- **Hide system messages** toggle — silences join/timeout/clear notifications.
+- **Channel-state badges** in the header — small pills for Slow mode (with interval), Subs only, Emote only, Followers only (with duration), and Unique-chat (r9k), driven by `ROOMSTATE` tags.
+- **Pronouns** display next to usernames via the public `pronouns.alejo.io` service. Off by default; per-user lookups are cached for the session and back-filled into already-rendered messages.
+- **Keyword highlight** — comma-separated keyword list in Settings → Filter. Matching messages get a yellow accent. Username matches against the keyword list also highlight.
+
 ## [0.11.0] - 2026-05-11
 ### Added
 - **Badges toggle** in Settings → Display. Hides all user badges in chat.
