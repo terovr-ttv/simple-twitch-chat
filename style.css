@@ -528,6 +528,12 @@
     font-family: inherit;
   }
   #settings-menu .menu-input:focus { border-color: var(--accent); }
+  #settings-menu .menu-range {
+    width: 100%;
+    accent-color: var(--accent);
+    margin: 2px 0 4px;
+    cursor: pointer;
+  }
 
   /* Keyword-highlight: glowing yellow accent that works on dark or transparent bg */
   .msg.highlight {
@@ -598,7 +604,9 @@
     opacity: 1;
     pointer-events: auto;
   }
-  body.overlay-mode #chat-wrapper { background: transparent; }
+  /* Background opacity in overlay mode is user-controlled via Settings →
+     Display → Overlay background opacity. Default 0 = fully transparent. */
+  body.overlay-mode #chat-wrapper { background: rgba(14, 14, 16, var(--overlay-bg-opacity, 0)); }
   body.overlay-mode #chat { background: transparent; }
   body.overlay-mode .msg {
     text-shadow:
