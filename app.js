@@ -23,6 +23,7 @@
   const FADE_IDLE_KEY = 'twitch-chat-monitor-fade-idle';
   const FADE_IDLE_SECONDS_KEY = 'twitch-chat-monitor-fade-idle-seconds';
   const AUTO_RECONNECT_KEY = 'twitch-chat-monitor-auto-reconnect';
+  const OVERLAY_OPACITY_KEY = 'twitch-chat-monitor-overlay-opacity';
   const FADE_IDLE_DEFAULT_SECONDS = 30;
 
   // Common Twitch chat bots — visible-by-default since some channels rely on
@@ -85,6 +86,7 @@
   const fadeIdleBtn = document.getElementById('fade-idle-btn');
   const fadeIdleSecondsInput = document.getElementById('fade-idle-seconds');
   const autoReconnectBtn = document.getElementById('auto-reconnect-btn');
+  const overlayOpacityInput = document.getElementById('overlay-opacity');
 
   // Settings popover toggle. Open/close via the gear button; click outside closes.
   function setSettingsOpen(open) {
@@ -333,6 +335,23 @@
     const on = !document.body.classList.contains('overlay-mode');
     setOverlayMode(on);
     localStorage.setItem(OVERLAY_KEY, on ? '1' : '0');
+  });
+
+  // Overlay background opacity (0-100, default 0 = fully transparent). Drives
+  // a CSS custom property that the overlay-mode chat background reads. Only
+  // takes visible effect when overlay mode is on, but the value persists either way.
+  let overlayOpacity = parseInt(localStorage.getItem(OVERLAY_OPACITY_KEY), 10);
+  if (!Number.isFinite(overlayOpacity) || overlayOpacity < 0 || overlayOpacity > 100) {
+    overlayOpacity = 0;
+  }
+  overlayOpacityInput.value = String(overlayOpacity);
+  document.documentElement.style.setProperty('--overlay-bg-opacity', String(overlayOpacity / 100));
+  overlayOpacityInput.addEventListener('input', () => {
+    const v = parseInt(overlayOpacityInput.value, 10);
+    if (!Number.isFinite(v)) return;
+    overlayOpacity = Math.max(0, Math.min(100, v));
+    document.documentElement.style.setProperty('--overlay-bg-opacity', String(overlayOpacity / 100));
+    localStorage.setItem(OVERLAY_OPACITY_KEY, String(overlayOpacity));
   });
 
   // Hide bots toggle
