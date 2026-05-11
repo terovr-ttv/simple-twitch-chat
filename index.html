@@ -25,6 +25,8 @@
             <button id="overlay-btn" class="secondary" title="Transparent overlay mode (for OBS browser source)">Overlay</button>
             <button id="pronouns-btn" class="secondary" title="Show user pronouns (pronouns.alejo.io)">Pronouns</button>
           </div>
+          <label class="menu-label" for="overlay-opacity">Overlay background opacity</label>
+          <input type="range" id="overlay-opacity" class="menu-range" min="0" max="100" step="5" title="Darkens the chat background in overlay mode for legibility" />
           <div class="menu-row">
             <button id="link-previews-btn" class="secondary" title="Show inline previews for images and YouTube videos">Link previews</button>
             <button id="auto-reconnect-btn" class="secondary" title="Automatically reconnect to your last channel when the page loads or refreshes">Auto-reconnect</button>
@@ -76,7 +78,7 @@
         </div>
       </div>
     </div>
-    <h1>Twitch Chat Monitor <span class="version">v1.0.12</span> <span class="credit">by <a href="https://streamelements.com/terovr/tip" target="_blank" rel="noopener noreferrer">Terovr</a></span></h1>
+    <h1>Twitch Chat Monitor <span class="version">v1.0.13</span> <span class="credit">by <a href="https://streamelements.com/terovr/tip" target="_blank" rel="noopener noreferrer">Terovr</a></span></h1>
     <span id="status"><span class="dot"></span><span id="status-text">Disconnected</span></span>
     <span id="channel-state" hidden></span>
     <input type="text" id="channel-input" placeholder="Twitch channel name" autocomplete="off" spellcheck="false" />
