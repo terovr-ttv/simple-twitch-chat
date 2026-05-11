@@ -34,6 +34,14 @@
     font-weight: var(--chat-font-weight, 700);
   }
   #chat .emote { height: calc(var(--chat-font-size, 13px) * 2.15); }
+  /* Emote-only messages with 1-3 emotes get rendered large — matches the
+     iOS Messages / Twitch behavior where an emoji-only/emote-only message
+     pops visually. Applied via JS in applyBigEmotesIfApplicable. */
+  #chat .msg.big-emotes .emote {
+    height: calc(var(--chat-font-size, 13px) * 4);
+    margin: 2px 4px 2px 0;
+  }
+  #chat .msg.big-emotes { padding-top: 6px; padding-bottom: 6px; }
   body {
     display: flex;
     flex-direction: column;
