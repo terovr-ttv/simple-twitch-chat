@@ -1,6 +1,6 @@
 {
   "name": "simple-chat-monitor",
-  "version": "1.0.13",
+  "version": "1.0.15",
   "description": "Zero-dependency static web app that displays a Twitch channel's chat in real time. No OAuth required.",
   "author": "Terovr (https://www.twitch.tv/terovr)",
   "private": true,
