@@ -3,6 +3,10 @@
 All notable changes to Simple Chat Monitor.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.6] - 2026-05-11
+### Changed
+- **Big emotes now use the highest-resolution variant** available from each provider's CDN — Twitch `3.0`, BetterTTV `3x`, 7TV `4x.webp`, FrankerFaceZ `4`. So emote-only messages stay crisp instead of upscaling a thumbnail. Swap happens before the message is inserted into the DOM so there's no visible flicker. Normal-size emotes continue to use the smaller variants to save bandwidth.
+
 ## [1.0.5] - 2026-05-11
 ### Added
 - **Big emotes** for emote-only messages — if a message contains only 1-3 emotes (Twitch, BTTV, FFZ, or 7TV) and no other text or links, the emotes render at ~4× the normal size. Same behavior as iOS Messages with emoji-only sends.
