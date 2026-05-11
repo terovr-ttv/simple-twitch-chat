@@ -362,15 +362,226 @@
   /* Active state for any toggleable button */
   #pause-btn.active,
   #timestamps-btn.active,
-  #badges-btn.active {
+  #badges-btn.active,
+  #overlay-btn.active,
+  #pronouns-btn.active,
+  #hide-bots-btn.active,
+  #hide-system-btn.active,
+  #link-previews-btn.active {
     background: var(--accent);
     color: white;
     border-color: var(--accent);
   }
 
-  /* Hide all badges when the toggle is off — keeps the chat connection-free
-     even when the badge CDN happens to be reachable. */
+  /* Reply context — shown above a message when the user used Twitch's Reply feature */
+  .msg .reply-context {
+    display: block;
+    font-size: 0.85em;
+    color: var(--text-muted);
+    margin: 0 0 3px 0;
+    padding: 1px 6px;
+    border-left: 2px solid var(--border);
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 400;
+  }
+  .msg .reply-context .reply-arrow { margin-right: 4px; opacity: 0.8; }
+  .msg .reply-context .reply-user { color: var(--accent); font-weight: 600; }
+  body.overlay-mode .msg .reply-context {
+    background: rgba(14, 14, 16, 0.55);
+    border-radius: 3px;
+  }
+
+  /* Linkified URLs inside chat messages */
+  .msg .msg-link {
+    color: var(--accent);
+    text-decoration: none;
+    word-break: break-all;
+  }
+  .msg .msg-link:hover { text-decoration: underline; }
+
+  /* Inline link preview cards (Discord-ish, but client-side only) */
+  .msg .preview-card {
+    display: block;
+    margin: 6px 0 2px;
+    max-width: 360px;
+    border-radius: 6px;
+    overflow: hidden;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    line-height: 0;
+  }
+  .msg .preview-card a {
+    display: block;
+    position: relative;
+    text-decoration: none;
+    color: var(--text);
+  }
+  .msg .preview-card img {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 220px;
+    object-fit: cover;
+  }
+  .msg .preview-card.preview-image { max-width: 240px; }
+  .msg .preview-card .preview-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 4px;
+    background: linear-gradient(180deg, transparent 60%, rgba(0,0,0,0.6));
+    pointer-events: none;
+    line-height: 1.2;
+  }
+  .msg .preview-card .preview-icon {
+    font-size: 32px;
+    color: white;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.8);
+  }
+  .msg .preview-card .preview-label {
+    font-size: 11px;
+    color: white;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 700;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+  }
+  /* Pill-style preview (no thumbnail — used for Twitch clips, etc.) */
+  .msg .preview-card.preview-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    line-height: 1.4;
+    max-width: none;
+    background: rgba(145, 71, 255, 0.12);
+    border-color: var(--accent);
+  }
+  .msg .preview-card.preview-pill a {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 0.9em;
+  }
+  /* In overlay mode the cards need their own backing so they pop over video */
+  body.overlay-mode .msg .preview-card {
+    background: rgba(14, 14, 16, 0.85);
+  }
+
+  /* Toggle-driven visibility */
   body.hide-badges .msg .badge { display: none; }
+  body.hide-bots .msg.bot-msg { display: none; }
+  body.hide-system .msg.system { display: none; }
+
+  /* Menu input + label (keyword highlight field) */
+  #settings-menu .menu-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+  #settings-menu .menu-input {
+    width: 100%;
+    background: var(--bg-input);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 7px 10px;
+    font-size: 12px;
+    outline: none;
+    font-family: inherit;
+  }
+  #settings-menu .menu-input:focus { border-color: var(--accent); }
+
+  /* Keyword-highlight: glowing yellow accent that works on dark or transparent bg */
+  .msg.highlight {
+    background: rgba(255, 215, 0, 0.10);
+    border-left: 3px solid #ffd700;
+    padding-left: 6px;
+  }
+
+  /* Pronouns chip next to username */
+  .msg .pronouns {
+    display: inline-block;
+    font-size: 0.8em;
+    padding: 0 5px;
+    margin-right: 4px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--text-muted);
+    font-weight: 500;
+    vertical-align: middle;
+  }
+
+  /* Channel-state mini badges in header (slow, sub-only, etc.) */
+  #channel-state {
+    display: inline-flex;
+    gap: 4px;
+    margin-left: 4px;
+    flex-wrap: wrap;
+  }
+  #channel-state[hidden] { display: none; }
+  #channel-state .cs-badge {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+  #channel-state .cs-badge.slow { border-color: #f5a623; color: #f5a623; }
+  #channel-state .cs-badge.subs { border-color: #6441a5; color: #b990ff; }
+  #channel-state .cs-badge.emote { border-color: #00d26a; color: #00d26a; }
+  #channel-state .cs-badge.followers { border-color: #1d9bf0; color: #1d9bf0; }
+  #channel-state .cs-badge.r9k { border-color: #e91916; color: #ff7676; }
+
+  /* --- Overlay mode (for OBS browser source) ---
+     Background goes transparent and chat text gets a heavy shadow so it stays
+     readable over any video. Header reduces to a faint strip that lights up on
+     hover so the settings remain accessible. */
+  body.overlay-mode { background: transparent; }
+  body.overlay-mode header {
+    background: rgba(24, 24, 27, 0.15);
+    border-bottom-color: transparent;
+    transition: background 0.15s ease;
+  }
+  body.overlay-mode header:hover { background: rgba(24, 24, 27, 0.92); }
+  body.overlay-mode header > *:not(.menu-wrapper) {
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    pointer-events: none;
+  }
+  body.overlay-mode header:hover > * {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  body.overlay-mode #chat-wrapper { background: transparent; }
+  body.overlay-mode #chat { background: transparent; }
+  body.overlay-mode .msg {
+    text-shadow:
+      0 0 4px rgba(0,0,0,0.95),
+      0 0 2px rgba(0,0,0,0.95),
+      0 1px 2px rgba(0,0,0,1);
+  }
+  /* Keep event/highlight/cheer cards readable in overlay mode — slightly darker
+     background so the colored accents still pop against a moving video bg. */
+  body.overlay-mode .msg.event-card,
+  body.overlay-mode .msg.highlight,
+  body.overlay-mode .msg.cheer,
+  body.overlay-mode .msg.first-msg {
+    background-color: rgba(14, 14, 16, 0.65);
+  }
 
   /* Timestamps: hidden by default, shown when body has the class */
   .msg .timestamp {
