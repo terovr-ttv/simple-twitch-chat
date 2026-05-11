@@ -3,6 +3,10 @@
 All notable changes to Simple Chat Monitor.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.13] - 2026-05-11
+### Added
+- **Overlay background opacity** slider in Settings → Display. Drag from 0 (fully transparent, prior default) up to 100 (solid dark) to dim the chat background in overlay mode — useful when chat is hard to read against a bright or busy stream scene. Value persists in `localStorage` and is independent of the overlay toggle itself.
+
 ## [1.0.12] - 2026-05-11
 ### Added
 - **Auto-reconnect** toggle in Settings → Display. When on (default), the page automatically connects to your last saved channel on load or refresh. A URL hash deep-link (`index.html#channel`) still takes precedence over the saved channel, so OBS browser sources with explicit channels are unaffected.
