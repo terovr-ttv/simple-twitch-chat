@@ -375,10 +375,19 @@
   #pronouns-btn.active,
   #hide-bots-btn.active,
   #hide-system-btn.active,
-  #link-previews-btn.active {
+  #link-previews-btn.active,
+  #fade-idle-btn.active {
     background: var(--accent);
     color: white;
     border-color: var(--accent);
+  }
+
+  /* Idle-fade: chat opacity transitions to 0 after a period of silence. When
+     a new message arrives, JS clears the chat and resets opacity, so the
+     viewer only ever sees fresh activity. */
+  #chat.fading-out {
+    transition: opacity 1.5s ease-out;
+    opacity: 0;
   }
 
   /* Reply context — shown above a message when the user used Twitch's Reply feature */
