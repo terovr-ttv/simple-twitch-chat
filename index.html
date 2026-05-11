@@ -43,8 +43,13 @@
             <button id="hide-bots-btn" class="secondary" title="Hide common chat bots (Nightbot, StreamElements, etc.)">Hide bots</button>
             <button id="hide-system-btn" class="secondary" title="Hide system messages (joins, timeouts, etc.)">Hide system</button>
           </div>
+          <div class="menu-row">
+            <button id="hide-commands-btn" class="secondary" title="Hide chat commands (messages that start with !)">Hide commands</button>
+          </div>
           <label class="menu-label">Highlight keywords (comma-separated)</label>
           <input type="text" id="keyword-input" class="menu-input" placeholder="e.g. terovr, raid, vod" autocomplete="off" spellcheck="false" />
+          <label class="menu-label">Exclude users (comma-separated)</label>
+          <input type="text" id="exclude-users-input" class="menu-input" placeholder="e.g. spambot1, scammyuser" autocomplete="off" spellcheck="false" />
         </div>
         <div class="menu-section">
           <div class="menu-section-title">Font</div>
@@ -78,7 +83,7 @@
         </div>
       </div>
     </div>
-    <h1>Twitch Chat Monitor <span class="version">v1.0.13</span> <span class="credit">by <a href="https://streamelements.com/terovr/tip" target="_blank" rel="noopener noreferrer">Terovr</a></span></h1>
+    <h1>Twitch Chat Monitor <span class="version">v1.0.15</span> <span class="credit">by <a href="https://streamelements.com/terovr/tip" target="_blank" rel="noopener noreferrer">Terovr</a></span></h1>
     <span id="status"><span class="dot"></span><span id="status-text">Disconnected</span></span>
     <span id="channel-state" hidden></span>
     <input type="text" id="channel-input" placeholder="Twitch channel name" autocomplete="off" spellcheck="false" />
