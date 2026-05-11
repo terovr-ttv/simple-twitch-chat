@@ -1030,6 +1030,7 @@
       `<span class="name" style="color:${escapeHtml(color)}">${escapeHtml(username)}</span> ` +
       `<span class="text"${isAction ? ` style="color:${escapeHtml(color)}"` : ''}>${messageHtml}</span>`;
 
+    applyBigEmotesIfApplicable(div);
     attachLinkPreviews(div, text);
     appendMessage(div);
 
@@ -1069,6 +1070,22 @@
       `Replying to <span class="reply-user">@${escapeHtml(parentName)}</span>: ` +
       escapeHtml(preview) +
       `</div>`;
+  }
+
+  // Big-emote treatment: if the rendered message body contains only 1-3 emote
+  // images and no other meaningful content (no text, no links), display the
+  // emotes large — same behavior as iOS Messages with emoji-only messages.
+  function applyBigEmotesIfApplicable(msgDiv) {
+    const textSpan = msgDiv.querySelector('.text');
+    if (!textSpan) return;
+    const emotes = textSpan.querySelectorAll('img.emote');
+    if (emotes.length === 0 || emotes.length > 3) return;
+    // Bail if there's a link in the message — it's not "just emotes".
+    if (textSpan.querySelector('a')) return;
+    // textContent ignores <img> alt text, so any remaining whitespace-only
+    // string here means the message is genuinely just emotes.
+    if (textSpan.textContent.replace(/\s+/g, '') !== '') return;
+    msgDiv.classList.add('big-emotes');
   }
 
   // ---- Event cards (USERNOTICE) ----
