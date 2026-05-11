@@ -3,6 +3,14 @@
 All notable changes to Simple Chat Monitor.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.8] - 2026-05-11
+### Fixed
+- Fade-idle seconds input was overflowing the settings menu in narrower viewports. Restructured the row to match the keyword-highlight pattern: label on its own line, full-width input below — fits any menu width cleanly.
+
+## [1.0.7] - 2026-05-11
+### Added
+- **Fade idle** mode (Settings → Display → Fade idle). After a configurable period of chat silence (default 30 seconds, range 5-600), the chat fades to opacity 0 over 1.5 seconds. The next message that arrives clears the stale (now invisible) messages so the viewer only ever sees fresh activity. Perfect for stream overlays where stale chat clutters the screen during quiet moments. Seconds input lives next to the toggle. Disabled by default, persists in `localStorage`.
+
 ## [1.0.6] - 2026-05-11
 ### Changed
 - **Big emotes now use the highest-resolution variant** available from each provider's CDN — Twitch `3.0`, BetterTTV `3x`, 7TV `4x.webp`, FrankerFaceZ `4`. So emote-only messages stay crisp instead of upscaling a thumbnail. Swap happens before the message is inserted into the DOM so there's no visible flicker. Normal-size emotes continue to use the smaller variants to save bandwidth.
