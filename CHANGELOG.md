@@ -3,6 +3,10 @@
 All notable changes to Simple Chat Monitor.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.5] - 2026-05-11
+### Added
+- **Big emotes** for emote-only messages — if a message contains only 1-3 emotes (Twitch, BTTV, FFZ, or 7TV) and no other text or links, the emotes render at ~4× the normal size. Same behavior as iOS Messages with emoji-only sends.
+
 ## [1.0.4] - 2026-05-11
 ### Added
 - **Empty state** in the chat panel — shown before any messages arrive. Welcome card with a hint about the no-OAuth nature of the tool. Auto-hides via CSS `:has()` the moment any message lands, no JS needed. Suppressed entirely in overlay mode.
