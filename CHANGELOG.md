@@ -3,6 +3,15 @@
 All notable changes to Simple Chat Monitor.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.9] - 2026-05-11
+### Added
+- **Twitch Power-up support** (best-effort, based on observed IRC tags):
+  - **Gigantify an Emote** (`msg-id=gigantified-emote-message`) — emotes in the message render at the big-emote size with the highest-resolution CDN variant, even when surrounding text is present.
+  - **Message Effects** (`animation-id=<effect>`) — visually highlighted with a gold-purple gradient backing, ⚡ marker, and a slow ambient shimmer. The exact effect name is stored on `data-effect` for future styling. We don't try to faithfully reproduce Twitch's bespoke animations, but Power-up messages clearly stand out.
+  - A unified `power-up` CSS class is applied to either case.
+### Changed
+- Internal refactor: extracted `forceBigEmotes(div)` so both the auto-detect (emote-only) path and the Gigantify path share the same class-add + CDN-upscale logic.
+
 ## [1.0.8] - 2026-05-11
 ### Fixed
 - Fade-idle seconds input was overflowing the settings menu in narrower viewports. Restructured the row to match the keyword-highlight pattern: label on its own line, full-width input below — fits any menu width cleanly.
