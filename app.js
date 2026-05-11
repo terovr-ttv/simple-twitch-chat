@@ -1075,6 +1075,8 @@
   // Big-emote treatment: if the rendered message body contains only 1-3 emote
   // images and no other meaningful content (no text, no links), display the
   // emotes large — same behavior as iOS Messages with emoji-only messages.
+  // Also swaps each emote's src to its highest-resolution CDN variant so big
+  // emotes stay crisp instead of upscaling a thumbnail.
   function applyBigEmotesIfApplicable(msgDiv) {
     const textSpan = msgDiv.querySelector('.text');
     if (!textSpan) return;
@@ -1086,6 +1088,36 @@
     // string here means the message is genuinely just emotes.
     if (textSpan.textContent.replace(/\s+/g, '') !== '') return;
     msgDiv.classList.add('big-emotes');
+    // Upgrade each emote to its high-res variant. Happens before the message
+    // is inserted into the DOM, so there's no visible flicker.
+    for (const img of emotes) {
+      const upscaled = upscaleEmoteUrl(img.src);
+      if (upscaled !== img.src) img.src = upscaled;
+    }
+  }
+
+  // Each emote provider exposes higher-res variants via predictable URL patterns.
+  // Returns the original URL unchanged if the pattern doesn't match — the big
+  // emote then just renders the smaller image scaled up (slightly blurry, not
+  // broken).
+  function upscaleEmoteUrl(url) {
+    // Twitch:   .../emoticons/v2/{id}/default/dark/1.0 → /3.0
+    if (url.indexOf('static-cdn.jtvnw.net/emoticons/') !== -1) {
+      return url.replace(/\/(?:1|2)\.0(\?|$)/, '/3.0$1');
+    }
+    // BetterTTV: .../emote/{id}/2x → /3x
+    if (url.indexOf('cdn.betterttv.net/emote/') !== -1) {
+      return url.replace(/\/(?:1|2)x(\?|$)/, '/3x$1');
+    }
+    // 7TV:      .../emote/{id}/2x.webp → /4x.webp
+    if (url.indexOf('cdn.7tv.app/emote/') !== -1) {
+      return url.replace(/\/(?:1|2|3)x\.webp(\?|$)/, '/4x.webp$1');
+    }
+    // FrankerFaceZ: .../emoticon/{id}/2 → /4 (filename is just the size key)
+    if (url.indexOf('cdn.frankerfacez.com/') !== -1) {
+      return url.replace(/\/(?:1|2)(\?|$)/, '/4$1');
+    }
+    return url;
   }
 
   // ---- Event cards (USERNOTICE) ----
