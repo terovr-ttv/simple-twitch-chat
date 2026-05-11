@@ -448,6 +448,13 @@
   .msg .preview-card.preview-video,
   .msg .preview-card.preview-giphy { max-width: 240px; }
   .msg .preview-card.preview-video { cursor: pointer; }
+
+  /* Twitch clip thumbnail card — same shape as the YouTube preview, with a
+     Twitch purple border accent. */
+  .msg .preview-card.preview-twitch-clip {
+    max-width: 360px;
+    border-color: var(--accent);
+  }
   .msg .preview-card .preview-overlay {
     position: absolute;
     inset: 0;
