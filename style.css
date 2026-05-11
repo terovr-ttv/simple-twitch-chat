@@ -12,15 +12,27 @@
   * { box-sizing: border-box; }
   html, body {
     margin: 0;
-    height: 100%;
+    height: 100vh;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background: var(--bg);
     color: var(--text);
     font-size: 13px;
     line-height: 1.5;
+    -webkit-text-size-adjust: 100%;
   }
-  /* Chat font size is independent of header chrome so the controls stay compact. */
-  #chat { font-size: var(--chat-font-size, 13px); }
+  /* Dynamic viewport height so the layout doesn't get clipped under the mobile
+     browser address bar when it appears/hides. */
+  @supports (height: 100dvh) {
+    html, body { height: 100dvh; }
+  }
+  /* Chat font is driven by two CSS custom properties so the user can change
+     either the size or the family at runtime. Defaults to Gotham Bold with a
+     bold-weight fallback chain for systems that don't have it installed. */
+  #chat {
+    font-size: var(--chat-font-size, 13px);
+    font-family: var(--chat-font-family, 'Gotham Bold', 'Gotham', 'Montserrat', 'Helvetica Neue', Arial, sans-serif);
+    font-weight: var(--chat-font-weight, 700);
+  }
   #chat .emote { height: calc(var(--chat-font-size, 13px) * 2.15); }
   body {
     display: flex;
@@ -34,6 +46,7 @@
     align-items: center;
     gap: 8px;
     flex-shrink: 0;
+    flex-wrap: wrap;
   }
   header h1 {
     margin: 0;
@@ -201,3 +214,325 @@
     color: white;
     border-color: var(--accent);
   }
+
+  /* --- Credit (by Terovr) --- */
+  header h1 .credit {
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 400;
+    color: var(--text-muted);
+    font-size: 11px;
+    margin-left: 4px;
+  }
+  header h1 .credit a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  header h1 .credit a:hover { text-decoration: underline; }
+
+  header h1 .version {
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 400;
+    color: var(--text-muted);
+    font-size: 10px;
+    margin-left: 2px;
+    opacity: 0.7;
+  }
+
+  /* --- Settings popover menu --- */
+  .menu-wrapper { position: relative; }
+  #settings-btn {
+    /* Square-ish icon button for the hamburger glyph. */
+    font-size: 18px;
+    line-height: 1;
+    padding: 6px 12px;
+    min-width: 38px;
+  }
+  #settings-btn.active {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+  }
+  #settings-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.55);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 240px;
+  }
+  #settings-menu[hidden] { display: none; }
+  #settings-menu .menu-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  #settings-menu .menu-section-title {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    font-weight: 700;
+    padding: 0 2px 2px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 4px;
+  }
+  #settings-menu .menu-row {
+    display: flex;
+    gap: 6px;
+  }
+  #settings-menu .menu-row button {
+    flex: 1;
+    padding: 8px 10px;
+    font-size: 13px;
+    text-align: center;
+  }
+  #settings-menu .font-size-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 4px 0;
+  }
+  #settings-menu .font-size-row button {
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1;
+    border-radius: 50%;
+  }
+  #settings-menu .font-size-row .font-label {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text);
+    min-width: 28px;
+    text-align: center;
+    font-family: var(--chat-font-family, 'Gotham Bold', 'Gotham', 'Montserrat', 'Helvetica Neue', Arial, sans-serif);
+  }
+
+  /* Native <select> styled to match the dark menu */
+  .menu-select {
+    width: 100%;
+    background: var(--bg-input);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px 10px;
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    /* Custom caret */
+    background-image: linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
+                      linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+    background-position: calc(100% - 14px) 50%, calc(100% - 9px) 50%;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+    padding-right: 28px;
+  }
+  .menu-select:focus { border-color: var(--accent); }
+
+  /* Image-based badge (when Twitch's badge CDN provides an icon). Drops the
+     colored pill chrome that the text badges use. */
+  .badge.badge-img {
+    background: transparent;
+    padding: 0;
+    margin-right: 4px;
+    line-height: 0;
+  }
+  .badge.badge-img img {
+    height: calc(var(--chat-font-size, 13px) * 1.35);
+    width: auto;
+    margin: 0;
+    vertical-align: middle;
+  }
+
+  /* Active state for any toggleable button */
+  #pause-btn.active,
+  #timestamps-btn.active,
+  #badges-btn.active {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+  }
+
+  /* Hide all badges when the toggle is off — keeps the chat connection-free
+     even when the badge CDN happens to be reachable. */
+  body.hide-badges .msg .badge { display: none; }
+
+  /* Timestamps: hidden by default, shown when body has the class */
+  .msg .timestamp {
+    display: none;
+    color: var(--text-muted);
+    font-size: 0.85em;
+    margin-right: 6px;
+    font-variant-numeric: tabular-nums;
+  }
+  body.show-timestamps .msg .timestamp { display: inline; }
+
+  /* Filter banner */
+  #filter-banner {
+    background: rgba(145, 71, 255, 0.15);
+    border-bottom: 1px solid var(--accent);
+    color: var(--text);
+    font-size: 12px;
+    padding: 6px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+  #filter-banner[hidden] { display: none; }
+  #filter-banner strong { color: var(--accent); }
+  #filter-banner button { padding: 4px 10px; font-size: 11px; margin-left: auto; }
+
+  /* Clickable usernames */
+  .msg .name { cursor: pointer; }
+  .msg .name:hover { text-decoration: underline; }
+
+  /* First-time chatter highlight */
+  .msg.first-msg {
+    background: rgba(0, 210, 106, 0.08);
+    border-left: 3px solid #00d26a;
+    padding-left: 6px;
+  }
+
+  /* Cheer / bits highlight */
+  .msg.cheer {
+    background: rgba(206, 12, 12, 0.10);
+    border-left: 3px solid var(--danger);
+    padding-left: 6px;
+  }
+  .msg .bits-tag {
+    display: inline-block;
+    background: var(--danger);
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 3px;
+    margin-right: 5px;
+    vertical-align: middle;
+  }
+
+  /* Event cards (subs, gifts, raids, announcements, etc.) */
+  .msg.event-card {
+    background: linear-gradient(90deg, rgba(145, 71, 255, 0.18), rgba(145, 71, 255, 0.04));
+    border-left: 4px solid var(--accent);
+    padding: 10px 12px;
+    margin: 6px 0;
+    border-radius: 4px;
+  }
+  .msg.event-card .event-icon {
+    display: inline-block;
+    margin-right: 8px;
+    font-size: 1.3em;
+    vertical-align: middle;
+  }
+  .msg.event-card .event-text {
+    font-weight: 600;
+    color: var(--text);
+  }
+  .msg.event-card .event-user-msg {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    font-weight: 400;
+    color: var(--text);
+  }
+  /* Per-event-type accent colors */
+  .msg.event-card.event-raid { border-left-color: #ff7f50; background: linear-gradient(90deg, rgba(255, 127, 80, 0.20), rgba(255, 127, 80, 0.04)); }
+  .msg.event-card.event-announcement { border-left-color: #00d26a; background: linear-gradient(90deg, rgba(0, 210, 106, 0.18), rgba(0, 210, 106, 0.04)); }
+  .msg.event-card.event-subgift,
+  .msg.event-card.event-submysterygift,
+  .msg.event-card.event-anonsubgift { border-left-color: #faaf19; background: linear-gradient(90deg, rgba(250, 175, 25, 0.18), rgba(250, 175, 25, 0.04)); }
+
+  /* Third-party emote provider badge in tooltip; size matches Twitch emotes */
+  .msg .emote.tpe { /* marker class — no extra styling needed beyond .emote */ }
+
+  /* User-filter mode hides non-matching messages */
+  .msg.filter-hidden { display: none; }
+
+
+/* --- Mobile / touch optimizations --- */
+@media (max-width: 700px) {
+  header {
+    padding: 8px;
+    gap: 6px;
+  }
+
+  /* Title still visible — header is much lighter now that toggles live in the
+     Settings popover. Allowed to share a row with the hamburger; wraps naturally
+     when there's not enough width. */
+  header h1 {
+    flex: 0 1 auto;
+    font-size: 13px;
+    margin-right: 0;
+  }
+
+  #status {
+    order: -1;
+    flex: 0 0 100%;
+    padding: 0 2px;
+    font-size: 11px;
+  }
+
+  input[type="text"] {
+    /* 16px+ prevents iOS Safari from auto-zooming when the field is focused. */
+    font-size: 16px;
+    padding: 10px 12px;
+    flex: 1 1 60%;
+    min-width: 0;
+    width: auto;
+  }
+
+  header > button,
+  .menu-wrapper > button {
+    /* Roomy tap targets — Apple HIG recommends ~44px. */
+    min-height: 42px;
+    padding: 10px 14px;
+    font-size: 14px;
+  }
+
+  /* Settings popover: keep within the viewport on narrow screens. */
+  #settings-menu {
+    min-width: 0;
+    width: calc(100vw - 24px);
+    left: 0;
+    right: auto;
+  }
+  #settings-menu .menu-row button {
+    min-height: 42px;
+    font-size: 14px;
+  }
+  #settings-menu .font-size-row button {
+    width: 44px;
+    height: 44px;
+    font-size: 22px;
+  }
+
+  #chat { padding: 10px 12px; }
+  .msg { padding: 6px 2px; }
+
+  #pause-indicator {
+    padding: 10px 18px;
+    font-size: 13px;
+  }
+}
+
+/* Hide hover-only affordances on coarse pointers (touch). */
+@media (hover: none) {
+  .msg:hover { background: transparent; }
+}
