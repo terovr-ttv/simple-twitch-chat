@@ -14,6 +14,20 @@
   const FONT_FAMILY_KEY = 'twitch-chat-monitor-font-family';
   const TIMESTAMPS_KEY = 'twitch-chat-monitor-timestamps';
   const BADGES_KEY = 'twitch-chat-monitor-badges-hidden'; // '1' = hidden, anything else = shown
+  const OVERLAY_KEY = 'twitch-chat-monitor-overlay';
+  const HIDE_BOTS_KEY = 'twitch-chat-monitor-hide-bots';
+  const HIDE_SYSTEM_KEY = 'twitch-chat-monitor-hide-system';
+  const PRONOUNS_KEY = 'twitch-chat-monitor-pronouns';
+  const KEYWORDS_KEY = 'twitch-chat-monitor-keywords';
+  const LINK_PREVIEWS_KEY = 'twitch-chat-monitor-link-previews';
+
+  // Common Twitch chat bots — visible-by-default since some channels rely on
+  // these for context, but easy to silence via Settings → Filter.
+  const BOT_USERNAMES = new Set([
+    'nightbot', 'streamelements', 'streamlabs', 'moobot', 'fossabot',
+    'wizebot', 'soundalerts', 'deepbot', 'ankhbot', 'phantombot',
+    'restreambot', 'commanderroot', 'electricallongboard', 'lurxx',
+  ]);
   const MAX_MESSAGES = 250;
   const FONT_MIN = 10;
   const FONT_MAX = 64;
@@ -45,6 +59,10 @@
   let roomId = null;                 // broadcaster id (from ROOMSTATE) for emote APIs
   const thirdPartyEmotes = new Map();// emote text -> { url, provider }
   const badgeImages = new Map();     // "set/version" -> image URL (Twitch CDN)
+  const pronounCache = new Map();    // userLower -> string|null (null = lookup done, no pronoun set)
+  const pronounInFlight = new Set(); // userLower currently being fetched
+  let pronounsTable = null;          // id -> display string, loaded once from API
+  let keywords = [];                 // lowercased keyword strings for highlight matching
 
   const filterBanner = document.getElementById('filter-banner');
   const filterUserEl = document.getElementById('filter-user');
@@ -53,6 +71,13 @@
   const timestampsBtn = document.getElementById('timestamps-btn');
   const settingsBtn = document.getElementById('settings-btn');
   const settingsMenu = document.getElementById('settings-menu');
+  const overlayBtn = document.getElementById('overlay-btn');
+  const pronounsBtn = document.getElementById('pronouns-btn');
+  const hideBotsBtn = document.getElementById('hide-bots-btn');
+  const hideSystemBtn = document.getElementById('hide-system-btn');
+  const keywordInput = document.getElementById('keyword-input');
+  const channelStateEl = document.getElementById('channel-state');
+  const linkPreviewsBtn = document.getElementById('link-previews-btn');
 
   // Settings popover toggle. Open/close via the gear button; click outside closes.
   function setSettingsOpen(open) {
@@ -277,6 +302,78 @@
     }
   });
 
+  // Overlay mode (for OBS browser source)
+  if (localStorage.getItem(OVERLAY_KEY) === '1') {
+    document.body.classList.add('overlay-mode');
+    overlayBtn.classList.add('active');
+  }
+  overlayBtn.addEventListener('click', () => {
+    const on = document.body.classList.toggle('overlay-mode');
+    overlayBtn.classList.toggle('active', on);
+    localStorage.setItem(OVERLAY_KEY, on ? '1' : '0');
+  });
+
+  // Hide bots toggle
+  if (localStorage.getItem(HIDE_BOTS_KEY) === '1') {
+    document.body.classList.add('hide-bots');
+    hideBotsBtn.classList.add('active');
+  }
+  hideBotsBtn.addEventListener('click', () => {
+    const on = document.body.classList.toggle('hide-bots');
+    hideBotsBtn.classList.toggle('active', on);
+    localStorage.setItem(HIDE_BOTS_KEY, on ? '1' : '0');
+  });
+
+  // Hide system messages toggle
+  if (localStorage.getItem(HIDE_SYSTEM_KEY) === '1') {
+    document.body.classList.add('hide-system');
+    hideSystemBtn.classList.add('active');
+  }
+  hideSystemBtn.addEventListener('click', () => {
+    const on = document.body.classList.toggle('hide-system');
+    hideSystemBtn.classList.toggle('active', on);
+    localStorage.setItem(HIDE_SYSTEM_KEY, on ? '1' : '0');
+  });
+
+  // Pronouns toggle — off by default to keep the app connection-free out of the box.
+  let pronounsEnabled = localStorage.getItem(PRONOUNS_KEY) === '1';
+  if (pronounsEnabled) {
+    pronounsBtn.classList.add('active');
+    loadPronounsTable();
+  }
+  pronounsBtn.addEventListener('click', () => {
+    pronounsEnabled = !pronounsEnabled;
+    pronounsBtn.classList.toggle('active', pronounsEnabled);
+    localStorage.setItem(PRONOUNS_KEY, pronounsEnabled ? '1' : '0');
+    if (pronounsEnabled) loadPronounsTable();
+  });
+
+  // Link previews — on by default since they're a major QoL upgrade, but easy
+  // to disable when running connection-free.
+  let linkPreviewsEnabled = localStorage.getItem(LINK_PREVIEWS_KEY) !== '0';
+  if (linkPreviewsEnabled) linkPreviewsBtn.classList.add('active');
+  linkPreviewsBtn.addEventListener('click', () => {
+    linkPreviewsEnabled = !linkPreviewsEnabled;
+    linkPreviewsBtn.classList.toggle('active', linkPreviewsEnabled);
+    localStorage.setItem(LINK_PREVIEWS_KEY, linkPreviewsEnabled ? '1' : '0');
+  });
+
+  // Keyword highlight input — comma-separated; persists immediately
+  keywords = parseKeywords(localStorage.getItem(KEYWORDS_KEY) || '');
+  keywordInput.value = localStorage.getItem(KEYWORDS_KEY) || '';
+  keywordInput.addEventListener('input', () => {
+    const raw = keywordInput.value;
+    keywords = parseKeywords(raw);
+    localStorage.setItem(KEYWORDS_KEY, raw);
+  });
+
+  function parseKeywords(raw) {
+    return raw
+      .split(',')
+      .map(k => k.trim().toLowerCase())
+      .filter(Boolean);
+  }
+
   // Click a username to filter to that user; clear filter via banner button.
   chat.addEventListener('click', (e) => {
     const nameEl = e.target.closest('.name');
@@ -422,7 +519,9 @@
   }
 
   function renderTextSegment(text) {
-    if (thirdPartyEmotes.size === 0) return escapeHtml(text);
+    if (thirdPartyEmotes.size === 0 && !text.includes('http')) {
+      return escapeHtml(text);
+    }
     // Split on whitespace but preserve it so spacing stays intact.
     const parts = text.split(/(\s+)/);
     let out = '';
@@ -432,11 +531,119 @@
       const tpe = thirdPartyEmotes.get(part);
       if (tpe && isSafeEmoteUrl(tpe.url)) {
         out += `<img class="emote tpe" src="${escapeHtml(tpe.url)}" alt="${escapeHtml(part)}" title="${escapeHtml(part)} (${tpe.provider})" />`;
+      } else if (looksLikeUrl(part)) {
+        const safe = escapeHtml(part);
+        out += `<a class="msg-link" href="${safe}" target="_blank" rel="noopener noreferrer">${safe}</a>`;
       } else {
         out += escapeHtml(part);
       }
     }
     return out;
+  }
+
+  function looksLikeUrl(s) {
+    return s.length < 2048 && /^https?:\/\/[^\s<>"'`]+$/i.test(s);
+  }
+
+  function extractUrls(text) {
+    if (!text || !text.includes('http')) return [];
+    const out = [];
+    for (const part of text.split(/\s+/)) {
+      if (looksLikeUrl(part)) out.push(part);
+    }
+    return out;
+  }
+
+  // ---- Link previews ----
+  // Pure client-side: only kinds we can render without a backend.
+  //   - direct image URLs (jpg/png/gif/webp/bmp) → inline thumbnail
+  //   - YouTube videos → thumbnail from img.youtube.com (no API needed)
+  //   - Twitch clips → styled pill (Twitch CDN paths are not stable enough to
+  //                    embed thumbnails without the Helix API)
+  function attachLinkPreviews(msgDiv, text) {
+    if (!linkPreviewsEnabled) return;
+    const urls = extractUrls(text);
+    if (urls.length === 0) return;
+    let attached = 0;
+    for (const url of urls) {
+      if (attached >= 2) break; // keep noise down on link-heavy messages
+      const card = buildPreviewCard(url);
+      if (card) {
+        msgDiv.appendChild(card);
+        attached++;
+      }
+    }
+  }
+
+  function buildPreviewCard(url) {
+    // Direct image
+    if (/\.(jpe?g|png|gif|webp|bmp|avif)(\?[^"\s]*)?$/i.test(url)) {
+      return imagePreview(url);
+    }
+    // YouTube
+    const yt = url.match(/^https?:\/\/(?:www\.)?(?:youtu\.be\/|youtube\.com\/(?:watch\?[\w=&-]*v=|embed\/|shorts\/|live\/))([A-Za-z0-9_-]{6,15})/i);
+    if (yt) return youtubePreview(yt[1], url);
+    // Twitch clip
+    const tc = url.match(/^https?:\/\/clips\.twitch\.tv\/([A-Za-z0-9_-]+)/i)
+            || url.match(/^https?:\/\/(?:www\.)?twitch\.tv\/\w+\/clip\/([A-Za-z0-9_-]+)/i);
+    if (tc) return twitchPillPreview(url, '🎬 Twitch Clip');
+    // Twitch VOD / channel
+    const tv = url.match(/^https?:\/\/(?:www\.)?twitch\.tv\/videos\/([0-9]+)/i);
+    if (tv) return twitchPillPreview(url, '▶ Twitch VOD');
+    return null;
+  }
+
+  function imagePreview(url) {
+    const card = document.createElement('div');
+    card.className = 'preview-card preview-image';
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    const img = document.createElement('img');
+    img.src = url;
+    img.loading = 'lazy';
+    img.alt = 'Linked image';
+    img.referrerPolicy = 'no-referrer';
+    img.addEventListener('error', () => card.remove());
+    a.appendChild(img);
+    card.appendChild(a);
+    return card;
+  }
+
+  function youtubePreview(videoId, url) {
+    if (!/^[A-Za-z0-9_-]{6,15}$/.test(videoId)) return null;
+    const card = document.createElement('div');
+    card.className = 'preview-card preview-youtube';
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    const img = document.createElement('img');
+    img.src = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+    img.loading = 'lazy';
+    img.alt = 'YouTube video';
+    img.referrerPolicy = 'no-referrer';
+    img.addEventListener('error', () => card.remove());
+    const overlay = document.createElement('div');
+    overlay.className = 'preview-overlay';
+    overlay.innerHTML = '<span class="preview-icon">▶</span><span class="preview-label">YouTube</span>';
+    a.appendChild(img);
+    a.appendChild(overlay);
+    card.appendChild(a);
+    return card;
+  }
+
+  function twitchPillPreview(url, label) {
+    const card = document.createElement('div');
+    card.className = 'preview-card preview-pill';
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.textContent = label;
+    card.appendChild(a);
+    return card;
   }
 
   function isSafeEmoteUrl(u) {
@@ -490,6 +697,96 @@
       }
     } catch (_) {
       // Silent — fall back to text badges.
+    }
+  }
+
+  // ---- Pronouns (pronouns.alejo.io) ----
+  // Loaded only when the Pronouns toggle is on. Two endpoints:
+  //   GET /api/pronouns         — full id->definition table (cached once)
+  //   GET /api/users/{login}    — per-user lookup (cached per session)
+  async function loadPronounsTable() {
+    if (pronounsTable) return;
+    try {
+      const r = await fetch('https://pronouns.alejo.io/api/pronouns');
+      if (!r.ok) return;
+      const arr = await r.json();
+      pronounsTable = Object.create(null);
+      for (const p of (Array.isArray(arr) ? arr : [])) {
+        if (!p || !p.name) continue;
+        pronounsTable[p.name] = p.singular ? p.subject : `${p.subject}/${p.object}`;
+      }
+    } catch (_) { /* silent */ }
+  }
+
+  async function fetchUserPronoun(userLower) {
+    if (!pronounsEnabled) return;
+    if (pronounCache.has(userLower) || pronounInFlight.has(userLower)) return;
+    if (!/^[a-z0-9_]{3,25}$/.test(userLower)) return;
+    pronounInFlight.add(userLower);
+    try {
+      if (!pronounsTable) await loadPronounsTable();
+      const r = await fetch(`https://pronouns.alejo.io/api/users/${userLower}`);
+      if (!r.ok) { pronounCache.set(userLower, null); return; }
+      const arr = await r.json();
+      const entry = Array.isArray(arr) && arr[0];
+      const display = entry && pronounsTable ? (pronounsTable[entry.pronoun_id] || null) : null;
+      pronounCache.set(userLower, display || null);
+      if (display) backfillPronounsInDom(userLower, display);
+    } catch (_) {
+      pronounCache.set(userLower, null);
+    } finally {
+      pronounInFlight.delete(userLower);
+    }
+  }
+
+  function backfillPronounsInDom(userLower, display) {
+    const safeAttr = (typeof CSS !== 'undefined' && CSS.escape) ? CSS.escape(userLower) : userLower;
+    const nodes = chat.querySelectorAll(`.msg[data-user="${safeAttr}"]`);
+    for (const m of nodes) {
+      if (m.querySelector('.pronouns')) continue;
+      const name = m.querySelector('.name');
+      if (!name) continue;
+      const chip = document.createElement('span');
+      chip.className = 'pronouns';
+      chip.textContent = display;
+      name.parentNode.insertBefore(chip, name);
+    }
+  }
+
+  // ---- Channel state (slow / sub-only / emote-only / etc.) ----
+  // ROOMSTATE on join carries the full set; subsequent ROOMSTATEs may carry
+  // only the changed tag, so we merge into a persistent object.
+  let roomStateTags = {};
+
+  function updateChannelStateFromMsg(tags) {
+    Object.assign(roomStateTags, tags);
+    renderChannelState();
+  }
+
+  function renderChannelState() {
+    const t = roomStateTags;
+    const out = [];
+    const slow = parseInt(t.slow, 10);
+    if (Number.isFinite(slow) && slow > 0) out.push({ cls: 'slow', text: `Slow ${slow}s` });
+    if (t['subs-only'] === '1') out.push({ cls: 'subs', text: 'Subs only' });
+    if (t['emote-only'] === '1') out.push({ cls: 'emote', text: 'Emote only' });
+    const followers = parseInt(t['followers-only'], 10);
+    if (Number.isFinite(followers) && followers >= 0) {
+      out.push({ cls: 'followers', text: followers === 0 ? 'Followers only' : `Followers ${followers}m` });
+    }
+    if (t.r9k === '1') out.push({ cls: 'r9k', text: 'Unique chat' });
+
+    channelStateEl.innerHTML = '';
+    if (out.length === 0) {
+      channelStateEl.hidden = true;
+      return;
+    }
+    channelStateEl.hidden = false;
+    for (const b of out) {
+      const span = document.createElement('span');
+      span.className = `cs-badge ${b.cls}`;
+      span.textContent = b.text;
+      channelStateEl.appendChild(span);
     }
   }
 
@@ -612,28 +909,74 @@
     const isFirstMsg = tags['first-msg'] === '1';
     const bits = parseInt(tags['bits'], 10);
     const isCheer = Number.isFinite(bits) && bits > 0;
+    const isBot = BOT_USERNAMES.has(userLower);
+    const isHighlight = matchesKeyword(text, userLower);
 
     const div = document.createElement('div');
     let cls = 'msg';
     if (isAction) cls += ' action';
     if (isFirstMsg) cls += ' first-msg';
     if (isCheer) cls += ' cheer';
+    if (isBot) cls += ' bot-msg';
+    if (isHighlight) cls += ' highlight';
     div.className = cls;
     div.dataset.user = userLower;
 
     const badgesHtml = renderBadges(tags['badges']);
+    const pronounsHtml = renderPronounChip(userLower);
     const messageHtml = renderMessageWithEmotes(text, tags['emotes']);
     const timeHtml = `<span class="timestamp">${formatTime()}</span>`;
     const bitsHtml = isCheer ? `<span class="bits-tag">${bits} bits</span>` : '';
+    const replyHtml = renderReplyContext(tags);
 
     div.innerHTML =
+      replyHtml +
       timeHtml +
       bitsHtml +
       badgesHtml +
+      pronounsHtml +
       `<span class="name" style="color:${escapeHtml(color)}">${escapeHtml(username)}</span> ` +
       `<span class="text"${isAction ? ` style="color:${escapeHtml(color)}"` : ''}>${messageHtml}</span>`;
 
+    attachLinkPreviews(div, text);
     appendMessage(div);
+
+    // Fire-and-forget pronoun lookup (cached, no-op if disabled or already fetched).
+    if (pronounsEnabled) fetchUserPronoun(userLower);
+  }
+
+  function matchesKeyword(text, userLower) {
+    if (keywords.length === 0) return false;
+    // Strip URLs before matching so e.g. "raid" inside an example.com/raid URL
+    // doesn't trip the highlight.
+    const stripped = text.replace(/https?:\/\/\S+/gi, '');
+    const lower = stripped.toLowerCase();
+    for (const kw of keywords) {
+      if (lower.includes(kw) || userLower === kw) return true;
+    }
+    return false;
+  }
+
+  function renderPronounChip(userLower) {
+    if (!pronounsEnabled) return '';
+    const p = pronounCache.get(userLower);
+    if (!p) return '';
+    return `<span class="pronouns">${escapeHtml(p)}</span>`;
+  }
+
+  // Twitch's "Reply" feature populates reply-parent-* tags on the IRC message.
+  // Render a single-line context above the message so threading is readable.
+  function renderReplyContext(tags) {
+    const parentName = tags['reply-parent-display-name'];
+    const parentBody = tags['reply-parent-msg-body'];
+    if (!parentName || !parentBody) return '';
+    const max = 100;
+    const preview = parentBody.length > max ? parentBody.slice(0, max - 1) + '…' : parentBody;
+    return `<div class="reply-context" title="${escapeHtml(parentBody)}">` +
+      `<span class="reply-arrow">↪</span>` +
+      `Replying to <span class="reply-user">@${escapeHtml(parentName)}</span>: ` +
+      escapeHtml(preview) +
+      `</div>`;
   }
 
   // ---- Event cards (USERNOTICE) ----
@@ -773,6 +1116,8 @@
           loadThirdPartyEmotes(currentChannel, roomId);
           if (!document.body.classList.contains('hide-badges')) loadBadges(roomId);
         }
+        // Channel-state badges (slow, subs-only, emote-only, etc.)
+        updateChannelStateFromMsg(msg.tags || {});
         break;
       case 'RECONNECT':
         addSystemMessage('Server requested reconnect...');
@@ -789,6 +1134,8 @@
     roomId = null;
     thirdPartyEmotes.clear();
     badgeImages.clear();
+    roomStateTags = {};
+    renderChannelState();
   }
 
   // ---- UI handlers ----
