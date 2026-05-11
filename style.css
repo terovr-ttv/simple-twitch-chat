@@ -419,14 +419,18 @@
     text-decoration: none;
     color: var(--text);
   }
-  .msg .preview-card img {
+  .msg .preview-card img,
+  .msg .preview-card video {
     display: block;
     width: 100%;
     height: auto;
     max-height: 220px;
     object-fit: cover;
   }
-  .msg .preview-card.preview-image { max-width: 240px; }
+  .msg .preview-card.preview-image,
+  .msg .preview-card.preview-video,
+  .msg .preview-card.preview-giphy { max-width: 240px; }
+  .msg .preview-card.preview-video { cursor: pointer; }
   .msg .preview-card .preview-overlay {
     position: absolute;
     inset: 0;
@@ -678,6 +682,53 @@
 
   /* User-filter mode hides non-matching messages */
   .msg.filter-hidden { display: none; }
+
+  /* Empty state — shown only while #chat has no children. Uses :has() so we
+     don't need any JS to hide/show it. Falls back to "always visible" on
+     ancient browsers that lack :has() support, which is acceptable. */
+  #empty-state {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 24px;
+    color: var(--text-muted);
+    pointer-events: none;
+    opacity: 1;
+    transition: opacity 0.18s ease;
+  }
+  #empty-state .empty-icon {
+    font-size: 48px;
+    margin-bottom: 8px;
+    opacity: 0.6;
+  }
+  #empty-state h2 {
+    margin: 0 0 6px;
+    font-size: 18px;
+    color: var(--text);
+    font-weight: 700;
+  }
+  #empty-state p {
+    margin: 4px 0;
+    font-size: 13px;
+    max-width: 320px;
+    line-height: 1.45;
+  }
+  #empty-state .empty-hint {
+    font-size: 11px;
+    opacity: 0.7;
+    margin-top: 6px;
+  }
+  /* Hide the placeholder the moment any message is appended */
+  #chat-wrapper:has(#chat > *) #empty-state {
+    opacity: 0;
+    visibility: hidden;
+  }
+  /* In overlay mode, the empty state is just visual noise — kill it */
+  body.overlay-mode #empty-state { display: none; }
 
 
 /* --- Mobile / touch optimizations --- */
