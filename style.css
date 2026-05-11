@@ -550,6 +550,9 @@
      Background goes transparent and chat text gets a heavy shadow so it stays
      readable over any video. Header reduces to a faint strip that lights up on
      hover so the settings remain accessible. */
+  /* Both html and body must be transparent — OBS browser sources composite
+     against the html element, so flipping body alone leaves a dark rectangle. */
+  html.overlay-mode,
   body.overlay-mode { background: transparent; }
   body.overlay-mode header {
     background: rgba(24, 24, 27, 0.15);
