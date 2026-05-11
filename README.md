@@ -1,140 +1,148 @@
-# Changelog
+# Simple Chat Monitor — Free Twitch Chat Overlay & Teleprompter
 
-All notable changes to Simple Chat Monitor.
-Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
+A free, **zero-install Twitch chat viewer** for streamers, hosts, and moderators. Drop a channel name in, get a clean, readable chat — no OAuth, no login, no API keys, no downloads. Works as an OBS browser source overlay, a second-monitor chat reader, a tablet chat panel, or a teleprompter-mirrored chat display.
 
-## [1.0.6] - 2026-05-11
-### Changed
-- **Big emotes now use the highest-resolution variant** available from each provider's CDN — Twitch `3.0`, BetterTTV `3x`, 7TV `4x.webp`, FrankerFaceZ `4`. So emote-only messages stay crisp instead of upscaling a thumbnail. Swap happens before the message is inserted into the DOM so there's no visible flicker. Normal-size emotes continue to use the smaller variants to save bandwidth.
+Built by [Terovr](https://www.twitch.tv/terovr).
 
-## [1.0.5] - 2026-05-11
-### Added
-- **Big emotes** for emote-only messages — if a message contains only 1-3 emotes (Twitch, BTTV, FFZ, or 7TV) and no other text or links, the emotes render at ~4× the normal size. Same behavior as iOS Messages with emoji-only sends.
+> **Looking for:** a Twitch chat overlay for OBS · a free Twitch chat reader · a no-OAuth chat viewer · a teleprompter-compatible chat display · a BetterTTV / FrankerFaceZ / 7TV emote viewer · a mobile-friendly Twitch chat monitor? This is built for that.
 
-## [1.0.4] - 2026-05-11
-### Added
-- **Empty state** in the chat panel — shown before any messages arrive. Welcome card with a hint about the no-OAuth nature of the tool. Auto-hides via CSS `:has()` the moment any message lands, no JS needed. Suppressed entirely in overlay mode.
-- **Klipy URL detection** — `klipy.com` GIF links now render as a styled `🎞️ Klipy GIF` pill (same treatment as Twitch clips). URL is stripped from the message text. Inline GIF rendering can be added later once Klipy's public CDN pattern is confirmed.
-### Changed
-- **Friendlier connection error messages**:
-  - First connection failure: "Can't reach Twitch — check your internet" (instead of generic "Connection error").
-  - Subsequent reconnect attempts give a clearer reason and mention the channel name might be invalid after a couple of retries.
-  - JOIN success now says "Joined #channel — waiting for chat activity…" so a quiet channel doesn't look broken.
+## Why use this
 
-## [1.0.3] - 2026-05-11
-### Removed
-- **Tenor GIF preview support** removed entirely. Google has announced the Tenor API is being sunset on 2025-06-30, so the integration would have stopped working anyway. Tenor links in chat now render as plain linkified URLs again. The CONFIG block at the top of `app.js` has been removed since it had no remaining keys to hold.
+- **Truly zero-install.** Open one HTML file, type a channel, you're reading chat. Nothing to download, no extension, no account.
+- **No login or OAuth required.** Uses Twitch's anonymous IRC nickname (`justinfan`) — full read-only access without ever touching your account.
+- **OBS browser-source ready.** Built-in **transparent overlay mode** with text shadows for legibility over any video background.
+- **Teleprompter mode.** Mirrors the display horizontally so chat reads correctly through a teleprompter's reflective glass — for streamers running their show off a reading rig.
+- **Real third-party emotes.** BetterTTV, FrankerFaceZ, and 7TV global + channel emote sets, fetched on connect.
+- **Real Twitch badge icons.** Broadcaster, mod, VIP, Amazon Prime, partner, subscriber tiers, bits — fetched from Twitch's badge CDN.
 
-## [1.0.2] - 2026-05-11
-### Added
-- **Tenor GIF previews** — page URLs (`tenor.com/view/...`) now render inline GIFs when a Tenor API key is configured in the new CONFIG block at the top of `app.js`. Renders an immediate pill placeholder, then upgrades to the GIF when the API responds. If no key is set, or the call fails, the pill stays as a clickable Tenor link — no broken state.
-- **CONFIG block** at the top of `app.js` for optional API keys (currently Tenor). Clearly marked, with a security note explaining that client-side keys are visible in the deployed source.
-### Changed
-- **Media URLs are now removed from the visible message text** when they produce a preview card. So an image/gif/video/YouTube/Twitch/Tenor link shows just the embed — no duplicate URL. Generic article links keep their linkified text. Adjacent whitespace is cleaned up so messages don't end up with double spaces.
+## Use cases
 
-## [1.0.1] - 2026-05-11
-### Added
-- **Giphy page-URL support** — links like `giphy.com/gifs/funny-cat-XYZabc123` (and `/stickers/...`) are now turned into inline GIF previews by deriving the CDN URL from the trailing ID in the slug. No API key needed.
-- **Inline video preview** for direct `.mp4` and `.webm` URLs (Discord CDN clips, Imgur `.mp4`) — autoplay, muted, looped, click-to-open in a new tab.
-### Fixed
-- OBS overlay mode now actually goes transparent. Previously only `<body>` was flipped to transparent, leaving `<html>` opaque — which OBS draws against, so a dark rectangle stayed on top of the scene. Both elements are now toggled in lockstep.
+| If you're… | …use it as |
+|---|---|
+| A Twitch streamer with one monitor | A browser-tab chat reader running alongside your game |
+| A Twitch streamer using OBS | A transparent **chat overlay** dropped into a browser source |
+| Running a teleprompter setup | A mirrored chat display for the reading glass |
+| Co-streaming or running a watch party | A clean second-monitor view of someone else's chat |
+| Moderating with a phone/tablet next to you | A touch-friendly chat panel with manual pause and click-to-filter |
+| Watching a stream on iPad while playing | A distraction-free chat reader without the player |
 
-## [1.0.0] - 2026-05-11
-First feature-complete release. Marks the transition out of pre-1.0; the feature surface is intentionally frozen here so the project stays maintainable.
+## Features
 
-### Added
-- **Reply threading display** — when a viewer uses Twitch's Reply feature, the parent author and a preview of the parent message render as a quoted line above the new message (driven by `reply-parent-display-name` / `reply-parent-msg-body` IRC tags).
-### Changed
-- README rewritten for discoverability — added use-cases table, OBS-overlay walkthrough, teleprompter walkthrough, privacy section, and keyword tail for search engines.
+### Connection
+- **Anonymous read-only** Twitch IRC WebSocket — no API keys, no OAuth, no rate limit headaches.
+- Auto-reconnect with exponential backoff.
+- URL hash deep-link: `index.html#channelname` auto-connects on load (perfect for OBS browser source bookmarks).
 
-## [0.13.0] - 2026-05-11
-### Added
-- **Clickable links** — URLs in chat messages are now linkified and open in a new tab.
-- **Inline link previews** (client-side, no backend scraping):
-  - Direct image URLs (jpg/png/gif/webp/bmp/avif) → inline thumbnail card.
-  - YouTube videos (regular, shorts, live) → thumbnail card with play overlay, fetched from the public `img.youtube.com` CDN.
-  - Twitch clips and VODs → styled pill links.
-- **Link previews toggle** in Settings → Display, on by default.
-### Changed
-- Keyword highlight no longer matches inside URL bodies — prevents false positives like "raid" matching inside `example.com/raid`.
+### Emotes & badges
+- Twitch emotes rendered from the official CDN.
+- **BetterTTV (BTTV)**, **FrankerFaceZ (FFZ)**, and **7TV** emotes — global and channel sets.
+- Real Twitch badge icons (mod, sub tiers, bits, Amazon Prime crown, VIP, partner, etc.), with text-label fallback.
 
-## [0.12.0] - 2026-05-11
-### Added
-- **Transparent overlay mode** for OBS browser source use — page bg goes transparent, chat text gets a heavy shadow for legibility over video, header fades and lights up on hover so settings stay accessible.
-- **Hide bots** toggle — hides messages from common chat bots (Nightbot, StreamElements, Moobot, Streamlabs, Fossabot, etc.).
-- **Hide system messages** toggle — silences join/timeout/clear notifications.
-- **Channel-state badges** in the header — small pills for Slow mode (with interval), Subs only, Emote only, Followers only (with duration), and Unique-chat (r9k), driven by `ROOMSTATE` tags.
-- **Pronouns** display next to usernames via the public `pronouns.alejo.io` service. Off by default; per-user lookups are cached for the session and back-filled into already-rendered messages.
-- **Keyword highlight** — comma-separated keyword list in Settings → Filter. Matching messages get a yellow accent. Username matches against the keyword list also highlight.
-
-## [0.11.0] - 2026-05-11
-### Added
-- **Badges toggle** in Settings → Display. Hides all user badges in chat.
-- Skips the badge CDN fetch on connect when badges are hidden, keeping the app fully connection-free.
-
-## [0.10.0]
-### Added
-- **Font family selector** in Settings → Font. 10 curated system fonts: Gotham Bold (default), Arial Black, Impact, Verdana, Tahoma, Trebuchet MS, Georgia, Consolas, Courier New, System default. Persisted to `localStorage`.
-- **Real Twitch badge icons** via the legacy `badges.twitch.tv` endpoint (no auth required). Covers global badges (broadcaster, mod, VIP, Amazon Prime, partner, etc.) and channel badges (subscriber tiers, bits tiers, hype-train, etc.).
-- Text-label fallback if the badge endpoint is unreachable.
-
-## [0.9.0]
-### Changed
-- Settings popover moved to the left side of the header.
-- Settings button now uses the hamburger glyph (☰).
-- Menu reorganized into Display / Font size / Actions sections with subtle dividers.
-- Font-size controls unified into a single row: `−  A  +` with circular buttons.
-
-## [0.8.0]
-### Added
-- "by Terovr" credit in the header, linking to the channel.
-### Changed
-- All toggle buttons collapsed into a single Settings popover.
-- Default chat font set to Gotham Bold (with bold-weight system fallbacks).
-
-## [0.7.0]
-### Added
-- **Quality-of-life pack**:
-  - Manual Pause / Resume button (overrides scroll-position detection).
-  - Clear chat button.
-  - Timestamps toggle (`HH:MM` per message).
-  - Click any username to filter to that user only; banner with "Clear filter".
-- **Event cards** for `USERNOTICE` messages: subs, resubs, gift subs, mystery gifts, raids, announcements, rituals — each with an icon and accent color.
+### Streamer event display
+- **Event cards** for subs, resubs, gift subs, mystery gifts, raids, announcements, rituals — each with an icon and accent color.
 - **First-time chatter** highlight (green left border).
-- **Cheer / bits** highlight (red left border + "N bits" pill).
-- **Third-party emotes**: BetterTTV, FrankerFaceZ, and 7TV — global sets and channel sets fetched on connect.
+- **Cheers / bits** highlight (red border + bits pill).
+- **Reply threading** — when a viewer uses Twitch's Reply feature, the parent message is shown as a quoted line above.
+- **Channel-state badges** — Slow mode, Subs-only, Emote-only, Followers-only, Unique chat — surfaced in the header from `ROOMSTATE`.
 
-## [0.6.0]
-### Added
-- Mobile / tablet support: responsive header with flex-wrap, larger tap targets (42px+), 16px input font to prevent iOS auto-zoom, `100dvh` viewport handling for mobile address bars.
-### Changed
-- Removed mouse-only hover-pause; auto-scroll pause/resume now driven purely by scroll position so it works on touch.
+### View modes
+- **Transparent overlay mode** (OBS-ready)
+- **Teleprompter mode** (horizontal mirror)
+- **Invert mode** (newest message on top)
+- **Timestamps** toggle
+- **Dark Twitch-style** default theme
 
-## [0.5.0]
-### Changed
-- Split `index.html` into separate `styles.css` and `app.js` files.
-### Added
-- `README.md` with usage, features, and how-it-works notes.
+### Customization
+- **Font family selector** — Gotham Bold (default), Arial Black, Impact, Verdana, Tahoma, Trebuchet MS, Georgia, Consolas, Courier New, system default.
+- **Font size** controls.
+- **Toggle visibility** of badges, system messages, and chat bots independently.
 
-## [0.4.0]
-### Added
-- Strict `#RRGGBB` validation on the `color` IRC tag (defense-in-depth against CSS injection).
-- Emote ID validation (alphanumeric/underscore) before interpolation into image URLs.
-- Channel name validation (`[a-z0-9_]{4,25}`) at connect time with a clear error.
-- Font size controls (A+ / A-) — persisted.
-- URL hash deep-link: `index.html#channelname` auto-connects on load.
-- `.gitignore` for OS/editor cruft and defensive entries.
+### Filters & focus
+- **Keyword highlight** — comma-separated list, with URL-body matching skipped to avoid false positives.
+- **Hide bots** toggle — silences Nightbot, StreamElements, Moobot, Streamlabs, Fossabot, and other common channel bots in one click.
+- **Hide system messages** toggle.
+- **Click a username** to filter chat to that user only.
+- **Pronouns** display via `pronouns.alejo.io` (optional, off by default).
 
-## [0.3.0]
-### Added
-- Invert chat direction toggle — newest messages at the top instead of the bottom; auto-scroll logic adapted to both directions.
+### Link previews (Discord-style)
+- Inline thumbnails for **direct image URLs** (jpg/png/gif/webp/avif).
+- **YouTube** video previews via the public `img.youtube.com` thumbnail CDN.
+- Styled link pills for **Twitch clips** and **VODs**.
+- All client-side, no scraping backend.
 
-## [0.2.0]
-### Added
-- Teleprompter mode — horizontal mirror via CSS so chat reads correctly through a teleprompter's reflective glass.
-### Changed
-- FIFO message cap reduced to 250 to keep long sessions lightweight.
+### Other
+- Mobile / tablet friendly — responsive header, large tap targets, touch scroll-to-pause.
+- FIFO message cap (250) for long sessions.
+- All preferences saved in `localStorage`.
 
-## [0.1.0]
-### Added
-- Initial release: anonymous Twitch IRC connection (no OAuth), emote rendering from Twitch CDN, text badges (mod/sub/VIP/etc.), auto-scroll with hover-pause, dark Twitch-like styling, `localStorage` for last channel.
+## Quick start
+
+1. Open `index.html` in a modern browser.
+2. Type a Twitch channel name (e.g. `xqc`, `pokimane`, `shroud`) and click **Connect**.
+3. (Optional) Open the **☰ Settings** menu in the top-left to enable overlay mode, change the font, hide bots, etc.
+
+That's it. No server, no install, no sign-up.
+
+### Using it as an OBS browser source
+
+1. In OBS, add a new **Browser** source.
+2. For the URL, point at the hosted file with a hash deep-link:
+   ```
+   https://your-host.example/path/to/index.html#yourchannel
+   ```
+3. Set the width/height to your overlay size (e.g. 400×600).
+4. Open the chat once, enable **☰ Settings → Display → Overlay** so the background goes transparent.
+5. The overlay state persists, so future loads start in overlay mode automatically.
+
+### Using it as a teleprompter chat display
+
+1. Connect to your channel.
+2. Open **☰ Settings → Display → Teleprompter**.
+3. Feed the screen into your teleprompter rig. The reflective glass un-mirrors the display so the operator sees it the right way around.
+
+### Deep-linking
+
+Append the channel name as the URL hash to auto-connect on load:
+```
+file:///path/to/index.html#xqc
+```
+Changing the hash later disconnects and reconnects to the new channel — useful for switching channels in an OBS browser source by editing the URL.
+
+## How it works
+
+The app opens a WebSocket to `wss://irc-ws.chat.twitch.tv:443` and authenticates anonymously using a `justinfan<random>` nickname. Twitch grants read-only chat access without OAuth for this nickname pattern. The client requests IRCv3 tag capabilities (`twitch.tv/tags` and `twitch.tv/commands`) so it can render emotes, badges, user colors, reply threading, channel state, cheers, and event metadata.
+
+After joining, the first `ROOMSTATE` message carries the broadcaster's Twitch user ID. The app uses that to fetch channel emote sets from BetterTTV, FrankerFaceZ, and 7TV in parallel — all three providers offer public, no-auth APIs. The legacy `badges.twitch.tv` endpoint is used for badge icons (also no-auth).
+
+## Files
+
+| File | Purpose |
+|---|---|
+| `index.html` | Page structure |
+| `style.css` | All styling, including overlay & teleprompter modes |
+| `app.js` | IRC client, message rendering, settings logic |
+| `package.json` | Canonical version + project metadata |
+| `CHANGELOG.md` | Full version history |
+
+## Browser support
+
+Any modern browser with WebSocket and ES2017+ support (Chrome, Firefox, Safari, Edge, mobile Safari, Chrome for Android). No transpilation, no polyfills.
+
+## Privacy
+
+- **No telemetry.** The app makes no analytics calls.
+- **No backend.** Everything runs in your browser.
+- **Network calls** are limited to: Twitch IRC (WebSocket), Twitch's emote/badge CDN, the optional BTTV/FFZ/7TV emote APIs, and the optional `pronouns.alejo.io` lookup. Each can be disabled in Settings.
+- **localStorage** stores only your local UI preferences (last channel, toggles).
+
+## Version
+
+Current: **v1.0.8**. See [CHANGELOG.md](CHANGELOG.md) for the full history.
+
+## Credits
+
+Built by **Terovr** — [twitch.tv/terovr](https://www.twitch.tv/terovr). If this tool saves you time, a tip is never required but always appreciated: [streamelements.com/terovr/tip](https://streamelements.com/terovr/tip).
+
+## Keywords
+
+Twitch chat overlay, free Twitch chat reader, no-OAuth Twitch chat, OBS browser source chat, Twitch chat for streamers, BetterTTV viewer, FrankerFaceZ viewer, 7TV emotes chat, teleprompter chat display, Twitch chat monitor, mobile Twitch chat, transparent chat overlay, Twitch chat browser source, free streaming tools, Twitch IRC viewer.
