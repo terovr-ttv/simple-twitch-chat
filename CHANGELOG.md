@@ -3,6 +3,16 @@
 All notable changes to Simple Chat Monitor.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.15] - 2026-05-11
+### Added
+- **Hide commands** toggle in Settings → Filter. When on, messages whose first non-space character is `!` followed by a word character (e.g. `!discord`, `!socials`, `!hi`) are hidden. Plain enthusiasm like `!` or `!!!` is unaffected. Persists in `localStorage`.
+### Removed
+- **Followers-only channel-state badge** from the header. The "Followers Xm" indicator was rarely useful and tended to be misread as a follower count.
+
+## [1.0.14] - 2026-05-11
+### Added
+- **Exclude users** field in Settings → Filter. Comma-separated list of Twitch usernames whose messages should be hidden — a manual companion to the built-in Hide-bots toggle, useful for silencing nuisance accounts, follower bots, or anyone that isn't in the default bot list. Applies live as you type (existing messages re-evaluate immediately) and persists in `localStorage`.
+
 ## [1.0.13] - 2026-05-11
 ### Added
 - **Overlay background opacity** slider in Settings → Display. Drag from 0 (fully transparent, prior default) up to 100 (solid dark) to dim the chat background in overlay mode — useful when chat is hard to read against a bright or busy stream scene. Value persists in `localStorage` and is independent of the overlay toggle itself.
