@@ -42,6 +42,17 @@
     margin: 2px 4px 2px 0;
   }
   #chat .msg.big-emotes { padding-top: 6px; padding-bottom: 6px; }
+  /* Gigantify Power-up: paid Bit-purchased effect that turns the indicated
+     emote into a full-blown banner. Rendered at 18× the chat font size —
+     roughly 4.5× the standard big-emote treatment — so the paid effect is
+     unmissable. Capped at 280px so it can't blow out a narrow OBS browser
+     source or a phone-width column. */
+  #chat .msg.gigantified .emote {
+    height: calc(var(--chat-font-size, 13px) * 18);
+    max-height: 280px;
+    margin: 8px 10px 8px 0;
+  }
+  #chat .msg.gigantified { padding-top: 16px; padding-bottom: 16px; }
   body {
     display: flex;
     flex-direction: column;
@@ -392,6 +403,118 @@
     opacity: 0;
   }
 
+  /* --- Message entry animations ---
+     Driven by body[data-anim] so each message gets the matching keyframe at
+     insertion time. animation-fill-mode: both keeps the start state visible
+     before the animation runs (prevents a flash) and the end state after.
+     Slide direction is flipped by body.invert-mode so the message always
+     enters from the "newest" edge. */
+  body[data-anim="fade"] #chat .msg.anim {
+    animation: msg-fade 240ms ease-out both;
+  }
+  body[data-anim="slide"] #chat .msg.anim {
+    animation: msg-slide-up 260ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+  body[data-anim="slide"].invert-mode #chat .msg.anim {
+    animation-name: msg-slide-down;
+  }
+  body[data-anim="pop"] #chat .msg.anim {
+    animation: msg-pop 320ms cubic-bezier(0.34, 1.4, 0.55, 1) both;
+    transform-origin: left top;
+  }
+  body[data-anim="blur"] #chat .msg.anim {
+    animation: msg-blur 320ms ease-out both;
+  }
+  body[data-anim="slide-side"] #chat .msg.anim {
+    animation: msg-slide-side 280ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+  /* Glow pulse: fade the message in, plus a transient colored ring painted by
+     a ::after pseudo-element so it doesn't fight with any inset accent stripe
+     the message variant already uses (event-card, cheer, etc.). The ring
+     color comes from --glow-color: user color for chat messages (set inline
+     in handlePrivmsg), event accent for event cards (set in this stylesheet),
+     or --accent as the default. */
+  body[data-anim="glow"] #chat .msg.anim {
+    animation: msg-fade 240ms ease-out both;
+    position: relative;
+  }
+  body[data-anim="glow"] #chat .msg.anim::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    animation: msg-glow-ring 1400ms ease-out;
+  }
+  /* Typewriter: each character + inline element is wrapped in a .tw-step
+     span with a staggered animation-delay (set inline via JS). The message
+     container itself doesn't animate — only the chars/emotes inside .text. */
+  body[data-anim="typewriter"] #chat .msg.anim .tw-step {
+    opacity: 0;
+    animation: tw-reveal 10ms linear forwards;
+    animation-delay: var(--tw-d, 0ms);
+  }
+  /* Decode: JS rotates random glyphs through each char before settling on
+     the real one. We force the scramble chars to inherit the surrounding
+     text color (so /me actions stay in the user's color, regular chat stays
+     white, link-style accent purple is never applied). A slight opacity dip
+     during scramble gives the locked-in chars a subtle "snap into focus". */
+  body[data-anim="decode"] #chat .msg.anim .dc-step:not(.dc-done) {
+    color: inherit;
+    opacity: 0.75;
+  }
+
+  @keyframes msg-fade {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  @keyframes msg-slide-up {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes msg-slide-down {
+    from { opacity: 0; transform: translateY(-14px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes msg-pop {
+    from { opacity: 0; transform: translateY(-14px) scale(0.96); }
+    55%  { opacity: 1; transform: translateY(3px) scale(1.015); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes msg-blur {
+    from { opacity: 0; filter: blur(8px); }
+    to   { opacity: 1; filter: blur(0); }
+  }
+  @keyframes msg-slide-side {
+    from { opacity: 0; transform: translateX(-22px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes msg-glow-ring {
+    0%   { box-shadow: 0 0 0 0 transparent; }
+    25%  { box-shadow: 0 0 16px 2px var(--glow-color, var(--accent)); }
+    100% { box-shadow: 0 0 0 0 transparent; }
+  }
+  @keyframes tw-reveal {
+    to { opacity: 1; }
+  }
+
+  /* Honor reduced-motion: skip the animations entirely. The decode mode is
+     handled in JS (matchMedia check) since it changes textContent, which CSS
+     can't undo. */
+  @media (prefers-reduced-motion: reduce) {
+    body[data-anim] #chat .msg.anim,
+    body[data-anim="typewriter"] #chat .msg.anim .tw-step {
+      animation: none !important;
+      opacity: 1 !important;
+      transform: none !important;
+      filter: none !important;
+    }
+    body[data-anim="glow"] #chat .msg.anim::after {
+      animation: none !important;
+      box-shadow: none !important;
+    }
+  }
+
   /* Reply context — shown above a message when the user used Twitch's Reply feature */
   .msg .reply-context {
     display: block;
@@ -537,11 +660,16 @@
     cursor: pointer;
   }
 
-  /* Keyword-highlight: glowing yellow accent that works on dark or transparent bg */
+  /* Keyword-highlight: glowing yellow accent that works on dark or transparent bg.
+     Renders as a rounded pill with an inset accent stripe (the stripe respects
+     border-radius, unlike border-left which would corner-curl). */
   .msg.highlight {
     background: rgba(255, 215, 0, 0.10);
-    border-left: 3px solid #ffd700;
-    padding-left: 6px;
+    box-shadow: inset 3px 0 0 #ffd700;
+    border-radius: 10px;
+    padding: 4px 10px 4px 12px;
+    margin: 3px 4px;
+    --glow-color: #ffd700;
   }
 
   /* Pronouns chip next to username */
@@ -655,27 +783,45 @@
   .msg .name { cursor: pointer; }
   .msg .name:hover { text-decoration: underline; }
 
-  /* First-time chatter highlight */
+  /* First-time chatter highlight. The leading green heart is the IRC-side
+     stand-in for a "new viewer" marker — Twitch doesn't deliver real follow
+     events over IRC, but the first-msg tag is the closest equivalent and
+     deserves a friendly icon. */
   .msg.first-msg {
     background: rgba(0, 210, 106, 0.08);
-    border-left: 3px solid #00d26a;
-    padding-left: 6px;
+    box-shadow: inset 3px 0 0 #00d26a;
+    border-radius: 10px;
+    padding: 4px 10px 4px 12px;
+    margin: 3px 4px;
+    --glow-color: #00d26a;
+  }
+  .msg.first-msg::before {
+    content: "💚";
+    margin-right: 6px;
+    vertical-align: middle;
+    font-size: 0.95em;
   }
 
   /* Cheer / bits highlight */
   .msg.cheer {
     background: rgba(206, 12, 12, 0.10);
-    border-left: 3px solid var(--danger);
-    padding-left: 6px;
+    box-shadow: inset 3px 0 0 var(--danger);
+    border-radius: 10px;
+    padding: 4px 10px 4px 12px;
+    margin: 3px 4px;
+    --glow-color: var(--danger);
   }
 
   /* Twitch Power-up messages (Gigantify or Message Effects). Gold gradient
      border with a subtle tint and a ⚡ marker so paid-Bit messages pop. */
   .msg.power-up {
     background: linear-gradient(90deg, rgba(245, 166, 35, 0.16), rgba(145, 71, 255, 0.06));
-    border-left: 3px solid #f5a623;
-    padding-left: 6px;
+    box-shadow: inset 3px 0 0 #f5a623;
+    border-radius: 10px;
+    padding: 4px 10px 4px 12px;
+    margin: 3px 4px;
     position: relative;
+    --glow-color: #f5a623;
   }
   .msg.power-up::before {
     content: "⚡";
@@ -709,13 +855,17 @@
     vertical-align: middle;
   }
 
-  /* Event cards (subs, gifts, raids, announcements, etc.) */
+  /* Event cards (subs, gifts, raids, announcements, etc.).
+     Rounded "pill" container with an inset accent stripe — sits inside the
+     chat with margin so it visually floats above regular messages, matching
+     the way Twitch's own event banners read. */
   .msg.event-card {
     background: linear-gradient(90deg, rgba(145, 71, 255, 0.18), rgba(145, 71, 255, 0.04));
-    border-left: 4px solid var(--accent);
-    padding: 10px 12px;
-    margin: 6px 0;
-    border-radius: 4px;
+    box-shadow: inset 3px 0 0 var(--accent);
+    padding: 10px 14px 10px 16px;
+    margin: 8px 4px;
+    border-radius: 14px;
+    --glow-color: var(--accent);
   }
   .msg.event-card .event-icon {
     display: inline-block;
@@ -734,12 +884,25 @@
     font-weight: 400;
     color: var(--text);
   }
-  /* Per-event-type accent colors */
-  .msg.event-card.event-raid { border-left-color: #ff7f50; background: linear-gradient(90deg, rgba(255, 127, 80, 0.20), rgba(255, 127, 80, 0.04)); }
-  .msg.event-card.event-announcement { border-left-color: #00d26a; background: linear-gradient(90deg, rgba(0, 210, 106, 0.18), rgba(0, 210, 106, 0.04)); }
+  /* Per-event-type accent colors. The inset stripe + gradient tint + glow
+     color all key off the same accent for each event type. */
+  .msg.event-card.event-raid {
+    box-shadow: inset 3px 0 0 #ff7f50;
+    background: linear-gradient(90deg, rgba(255, 127, 80, 0.20), rgba(255, 127, 80, 0.04));
+    --glow-color: #ff7f50;
+  }
+  .msg.event-card.event-announcement {
+    box-shadow: inset 3px 0 0 #00d26a;
+    background: linear-gradient(90deg, rgba(0, 210, 106, 0.18), rgba(0, 210, 106, 0.04));
+    --glow-color: #00d26a;
+  }
   .msg.event-card.event-subgift,
   .msg.event-card.event-submysterygift,
-  .msg.event-card.event-anonsubgift { border-left-color: #faaf19; background: linear-gradient(90deg, rgba(250, 175, 25, 0.18), rgba(250, 175, 25, 0.04)); }
+  .msg.event-card.event-anonsubgift {
+    box-shadow: inset 3px 0 0 #faaf19;
+    background: linear-gradient(90deg, rgba(250, 175, 25, 0.18), rgba(250, 175, 25, 0.04));
+    --glow-color: #faaf19;
+  }
 
   /* Third-party emote provider badge in tooltip; size matches Twitch emotes */
   .msg .emote.tpe { /* marker class — no extra styling needed beyond .emote */ }
