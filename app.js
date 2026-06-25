@@ -26,7 +26,32 @@
   const FADE_IDLE_SECONDS_KEY = 'twitch-chat-monitor-fade-idle-seconds';
   const AUTO_RECONNECT_KEY = 'twitch-chat-monitor-auto-reconnect';
   const OVERLAY_OPACITY_KEY = 'twitch-chat-monitor-overlay-opacity';
+  const MESSAGE_ANIM_KEY = 'twitch-chat-monitor-message-anim';
   const FADE_IDLE_DEFAULT_SECONDS = 30;
+  const VALID_ANIMS = new Set(['none', 'fade', 'slide', 'slide-side', 'pop', 'blur', 'glow', 'typewriter', 'decode']);
+  // How long (ms) each entry animation runs at the .msg level. After this,
+  // we strip the `.anim` class so the entry-animation CSS no longer overrides
+  // any perpetual per-message animation (e.g. the power-up gradient shimmer).
+  // Typewriter + decode are JS-driven per-character and don't apply any
+  // .msg-level animation, so they don't need cleanup (entry: 0).
+  const ANIM_CLEANUP_MS = {
+    none: 0,
+    fade: 280,
+    slide: 300,
+    'slide-side': 320,
+    pop: 360,
+    blur: 360,
+    glow: 1440,
+    typewriter: 0,
+    decode: 0,
+  };
+  // Glyphs cycled through during the Decode animation. Letters + most digits
+  // only — explicitly excluding visibly wide chars (M, W, m, w) and narrow
+  // ones (I, i, l, 1, 0) plus all symbols, so the scrambled message stays
+  // roughly the same visual width as the decoded message. (Earlier versions
+  // included @, #, &, %, etc. which made the scramble noticeably wider than
+  // the final text and read as "extra characters being added".)
+  const DECODE_GLYPHS = 'ABCDEFGHJKLNOPQRSTUVXYZabcdefghjknopqrstuvxyz23456789';
 
   // Common Twitch chat bots — visible-by-default since some channels rely on
   // these for context, but easy to silence via Settings → Filter.
@@ -157,13 +182,16 @@
   }
   fontFamilySelect.addEventListener('change', () => applyFontFamily(fontFamilySelect.value));
 
-  // Restore + wire up invert toggle
+  // Restore + wire up invert toggle. The body class lets CSS pick the right
+  // slide-in direction (newest edge = top when inverted, bottom otherwise).
   const invertBtn = document.getElementById('invert-btn');
+  document.body.classList.toggle('invert-mode', reverseDirection);
   if (reverseDirection) invertBtn.classList.add('active');
   invertBtn.addEventListener('click', () => {
     reverseDirection = !reverseDirection;
     localStorage.setItem(REVERSE_KEY, reverseDirection ? '1' : '0');
     invertBtn.classList.toggle('active', reverseDirection);
+    document.body.classList.toggle('invert-mode', reverseDirection);
     // Reverse existing DOM children so chat history stays in chronological order
     // relative to the new direction (newest visually adjacent to the newest edge).
     const children = Array.from(chat.children);
@@ -202,6 +230,26 @@
     if (excludedUsers.size > 0) {
       const u = node.dataset && node.dataset.user;
       if (u && excludedUsers.has(u)) node.classList.add('user-excluded');
+    }
+    // Tag for entry animation. Typewriter + decode need DOM prep before
+    // insertion (typewriter wraps chars with delayed CSS reveal; decode wraps
+    // chars and schedules a scramble interval). Container animations just rely
+    // on the .anim class + body[data-anim] CSS rule.
+    //
+    // For modes that animate the .msg itself we strip the .anim class once
+    // the animation has finished so per-message perpetual animations (e.g.
+    // the power-up gradient shimmer) can resume — the entry-animation rule
+    // would otherwise win on specificity forever.
+    if (messageAnim !== 'none') {
+      node.classList.add('anim');
+      if (messageAnim === 'typewriter') {
+        applyTypewriterPrep(node);
+      } else if (messageAnim === 'decode') {
+        applyDecodePrep(node);
+      } else {
+        const dur = ANIM_CLEANUP_MS[messageAnim] || 0;
+        if (dur > 0) setTimeout(() => node.classList.remove('anim'), dur);
+      }
     }
     if (reverseDirection) {
       chat.insertBefore(node, chat.firstChild);
@@ -479,6 +527,143 @@
     clearTimeout(fadeIdleTimer);
     fadeIdleTimer = null;
     chat.classList.remove('fading-out');
+  }
+
+  // Message entry animation selector. Stored as one of VALID_ANIMS; default
+  // 'fade' (subtle but noticeably alive). The selected mode is reflected on
+  // <body data-anim="..."> so the keyframes in CSS pick up automatically.
+  const messageAnimSelect = document.getElementById('message-anim-select');
+  // Default to 'none' so updates don't silently opt existing users into
+  // motion — they pick an animation explicitly from Settings if they want it.
+  let messageAnim = localStorage.getItem(MESSAGE_ANIM_KEY) || 'none';
+  // Re-validate against the (possibly updated) set on every load so values
+  // saved by older builds with names we no longer recognise reset cleanly.
+  if (!VALID_ANIMS.has(messageAnim)) messageAnim = 'none';
+  document.body.dataset.anim = messageAnim;
+  messageAnimSelect.value = messageAnim;
+  messageAnimSelect.addEventListener('change', () => {
+    const v = messageAnimSelect.value;
+    if (!VALID_ANIMS.has(v)) return;
+    messageAnim = v;
+    document.body.dataset.anim = v;
+    localStorage.setItem(MESSAGE_ANIM_KEY, v);
+  });
+
+  // Typewriter prep: walk .text descendants and wrap each character of every
+  // text node — plus each inline element (emote, link) — in a .tw-step span
+  // with a sequential --tw-d delay. We cap the per-char delay so a very long
+  // message still finishes in a reasonable time.
+  function applyTypewriterPrep(node) {
+    const textEl = node.querySelector('.text');
+    if (!textEl) return;
+    const steps = [];
+    // First, split text-node children into per-char spans; element children
+    // (img.emote, a.msg-link) become single steps. Walk a static snapshot
+    // since we mutate the tree as we go.
+    const children = Array.from(textEl.childNodes);
+    for (const child of children) {
+      if (child.nodeType === Node.TEXT_NODE) {
+        const text = child.nodeValue;
+        const frag = document.createDocumentFragment();
+        for (const ch of text) {
+          if (ch === ' ' || ch === '\n' || ch === '\t') {
+            // Whitespace stays unwrapped so layout breaks naturally.
+            frag.appendChild(document.createTextNode(ch));
+            continue;
+          }
+          const span = document.createElement('span');
+          span.className = 'tw-step';
+          span.textContent = ch;
+          frag.appendChild(span);
+          steps.push(span);
+        }
+        textEl.replaceChild(frag, child);
+      } else if (child.nodeType === Node.ELEMENT_NODE) {
+        const wrap = document.createElement('span');
+        wrap.className = 'tw-step';
+        textEl.replaceChild(wrap, child);
+        wrap.appendChild(child);
+        steps.push(wrap);
+      }
+    }
+    // Target ~750ms total reveal, capped at 30ms/char so 5-char messages
+    // still feel deliberate and 200-char messages don't drag past ~6s.
+    const perChar = Math.min(30, Math.max(10, Math.round(750 / Math.max(1, steps.length))));
+    for (let i = 0; i < steps.length; i++) {
+      steps[i].style.setProperty('--tw-d', (i * perChar) + 'ms');
+    }
+  }
+
+  // Decode prep: similar wrap to typewriter, but each char starts as a random
+  // glyph and cycles through more random glyphs for a brief scramble window
+  // before locking in to its real value. Inline elements (emotes, links) are
+  // wrapped in a single .dc-step that simply hides-then-unhides at its slot.
+  // Honors prefers-reduced-motion by bailing out entirely (the message just
+  // renders normally — no scramble at all).
+  function applyDecodePrep(node) {
+    if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      return;
+    }
+    const textEl = node.querySelector('.text');
+    if (!textEl) return;
+    const targets = [];
+    const children = Array.from(textEl.childNodes);
+    for (const child of children) {
+      if (child.nodeType === Node.TEXT_NODE) {
+        const text = child.nodeValue;
+        const frag = document.createDocumentFragment();
+        for (const ch of text) {
+          if (ch === ' ' || ch === '\n' || ch === '\t') {
+            frag.appendChild(document.createTextNode(ch));
+            continue;
+          }
+          const span = document.createElement('span');
+          span.className = 'dc-step';
+          span.textContent = randomDecodeGlyph();
+          frag.appendChild(span);
+          targets.push({ span, real: ch });
+        }
+        textEl.replaceChild(frag, child);
+      } else if (child.nodeType === Node.ELEMENT_NODE) {
+        const wrap = document.createElement('span');
+        wrap.className = 'dc-step';
+        // Inline elements (emotes, links) can't show a "random glyph", so we
+        // just hold their slot invisible and reveal at the right delay.
+        wrap.style.visibility = 'hidden';
+        textEl.replaceChild(wrap, child);
+        wrap.appendChild(child);
+        targets.push({ span: wrap, real: null });
+      }
+    }
+    // Target ~625ms total stagger, with each char scrambling for ~300ms
+    // before locking. Long messages still finish quickly because the stagger
+    // overlaps with the scramble — last char starts late but scrambles fast.
+    const perChar = Math.min(28, Math.max(8, Math.round(625 / Math.max(1, targets.length))));
+    const scrambleMs = 300;
+    targets.forEach((t, i) => {
+      const startDelay = i * perChar;
+      setTimeout(() => {
+        if (t.real === null) {
+          // Inline element slot: just unhide and mark done so the styling
+          // override clears (the wrapper had no scramble text to begin with).
+          t.span.style.visibility = '';
+          t.span.classList.add('dc-done');
+          return;
+        }
+        const iv = setInterval(() => {
+          t.span.textContent = randomDecodeGlyph();
+        }, 40);
+        setTimeout(() => {
+          clearInterval(iv);
+          t.span.textContent = t.real;
+          t.span.classList.add('dc-done');
+        }, scrambleMs);
+      }, startDelay);
+    });
+  }
+
+  function randomDecodeGlyph() {
+    return DECODE_GLYPHS[Math.floor(Math.random() * DECODE_GLYPHS.length)];
   }
 
   // Keyword highlight input — comma-separated; persists immediately
@@ -1255,6 +1440,10 @@
     if (isPowerUp) cls += ' power-up';
     div.className = cls;
     div.dataset.user = userLower;
+    // Used by the Glow-pulse entry animation. Event cards and the various
+    // highlight variants set their own --glow-color in CSS; this line gives
+    // regular chat messages their author's color for the same effect.
+    div.style.setProperty('--glow-color', color);
     if (hasMessageEffect && /^[a-z0-9_-]+$/i.test(animationId)) {
       div.dataset.effect = animationId.toLowerCase();
     }
@@ -1278,8 +1467,11 @@
     if (isGigantified) {
       // Gigantify a Power-up forces the indicated emote(s) huge regardless of
       // whether the message has surrounding text — so we skip the "emote-only"
-      // check and apply the treatment directly.
+      // check and apply the treatment directly. The extra `gigantified` class
+      // doubles the emote size beyond the standard big-emotes treatment so the
+      // paid Power-up reads visibly louder than a casual emote-only message.
       forceBigEmotes(div);
+      div.classList.add('gigantified');
     } else {
       applyBigEmotesIfApplicable(div);
     }
@@ -1377,12 +1569,39 @@
   }
 
   // ---- Event cards (USERNOTICE) ----
+  // Each msg-id gets its own glyph so a glance at the icon tells you the event
+  // type. The fallback star (★) only fires for msg-ids we haven't mapped yet.
+  // Note: Twitch doesn't deliver follow events over IRC (they come from
+  // EventSub/PubSub), so there's no "follow" entry here — the closest IRC
+  // surfacing is the .msg.first-msg highlight, which carries its own heart
+  // marker in CSS.
   const EVENT_ICONS = {
-    sub: '★', resub: '★', subgift: '🎁', submysterygift: '🎁',
-    anonsubgift: '🎁', anongiftpaidupgrade: '🎁', giftpaidupgrade: '🎁',
-    primepaidupgrade: '★', raid: '⚔', unraid: '⚔',
-    announcement: '📢', ritual: '✨', bitsbadgetier: '💎',
+    sub: '⭐',                  // first-time paid subscription (Tier 1/2/3)
+    resub: '👁',                // paid resub — eye for the watch-streak month count
+    subgift: '🎁',              // single gift sub
+    submysterygift: '🎲',       // mystery / community gift — randomized recipients
+    anonsubgift: '👤',          // anonymous gift sub
+    anongiftpaidupgrade: '⬆️',  // viewer upgraded a gifted sub to paid (anon gifter)
+    giftpaidupgrade: '⬆️',      // viewer upgraded a gifted sub to paid
+    primepaidupgrade: '⬆️',     // viewer upgraded from Prime to paid — also "now paying"
+    raid: '⚔',                  // incoming raid
+    unraid: '🚪',               // raid cancelled — exit door
+    announcement: '📢',         // moderator announcement
+    ritual: '✨',               // new-chatter ritual
+    bitsbadgetier: '💎',        // bits-badge tier upgrade
   };
+
+  // Pick the icon for an event card. The IRC `resub` and `sub` msg-ids fire
+  // regardless of sub plan (Prime / Tier 1 / 2 / 3) — so we override to the
+  // Prime crown when `msg-param-sub-plan` says Prime. Without this, a Prime
+  // resub renders with the eye icon meant for the watch-streak month count,
+  // which reads as wrong because Prime visually owns the crown on Twitch.
+  function pickEventIcon(msgId, tags) {
+    if ((msgId === 'sub' || msgId === 'resub') && tags && tags['msg-param-sub-plan'] === 'Prime') {
+      return '👑';
+    }
+    return EVENT_ICONS[msgId] || '★';
+  }
 
   function handleUserNotice(msg) {
     const tags = msg.tags || {};
@@ -1395,7 +1614,7 @@
     div.className = `msg event-card event-${safeMsgId}`;
     if (tags['login']) div.dataset.user = tags['login'].toLowerCase();
 
-    const icon = EVENT_ICONS[msgId] || '★';
+    const icon = pickEventIcon(msgId, tags);
     const timeHtml = `<span class="timestamp">${formatTime()}</span>`;
     let html = timeHtml +
       `<span class="event-icon">${icon}</span>` +
