@@ -3,6 +3,51 @@
 All notable changes to Simple Chat Monitor.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.22] - 2026-06-25
+### Changed
+- **"Pop" entry animation reworked into "Pop down".** The message now drops in from ~14px above its resting position with a slight scale-up bounce — overshooting ~3px past the resting line at peak before settling. Total duration bumped 280ms → 320ms to give the bounce room to read. Dropdown option renamed to "Pop down" so the label matches the motion; the underlying value is still `pop` so existing saved preferences carry over unchanged.
+
+## [1.0.21] - 2026-06-25
+### Fixed
+- **Prime sub/resub events now show the Prime crown (👑) instead of the watch-streak eye / first-time star.** The IRC `sub` and `resub` msg-ids fire for every sub plan (Prime, Tier 1/2/3), with the plan carried in the `msg-param-sub-plan` tag — the previous icon map was looking only at msg-id, so Prime resubs rendered with the eye meant for paid resubs. Paid sub/resub icons (⭐ and 👁) are unchanged.
+### Changed
+- **`primepaidupgrade` icon changed from 👑 to ⬆️** — the crown is now reserved exclusively for active Prime sub/resub events. A `primepaidupgrade` is a viewer *leaving* Prime to start paying, so it slots cleanly alongside the other "now paying" upgrade events (`giftpaidupgrade`, `anongiftpaidupgrade`) under the upgrade arrow.
+
+## [1.0.20] - 2026-06-25
+### Changed
+- **Glow-pulse animation duration doubled** (700ms → 1400ms) so the colored ring lingers visibly around each new message instead of flashing past. The peak intensity hits at ~350ms in and slow-fades over the remaining second, giving overlay viewers more time to notice the new arrival.
+
+## [1.0.19] - 2026-06-25
+### Changed
+- **Decode animation no longer appears to "add extra characters" during scramble.** The random-glyph pool was tightened to letters + most digits only — visibly wide chars (`M`, `W`, `m`, `w`), narrow chars (`I`, `i`, `l`, `1`, `0`), and all symbols (`@`, `#`, `&`, `%`, etc.) were removed. The scrambled message now stays roughly the same visual width as the decoded message.
+- **Decode animation now uses `color: inherit`** so scrambling characters match the surrounding text color (regular chat stays white, `/me` actions stay in the user's color, etc.). Earlier builds tinted the scramble accent-purple which read as link styling.
+- **Typewriter and Decode animations slowed slightly.** Typewriter total reveal target: 600ms → 750ms (cap 24 → 30ms per char). Decode total stagger: 500ms → 625ms (cap 22 → 28ms per char), with each char scrambling for 300ms (up from 240ms) before locking.
+- **Event-card icons are now unique per event type.** Previously `sub`, `resub`, and `primepaidupgrade` all shared a star, and every gift variant shared a wrapped present. New mapping: `sub`=⭐, `resub`=👁 (eye, for the watch-streak month count), `subgift`=🎁, `submysterygift`=🎲, `anonsubgift`=👤, `giftpaidupgrade`/`anongiftpaidupgrade`=⬆️, `primepaidupgrade`=👑, `raid`=⚔, `unraid`=🚪, `announcement`=📢, `ritual`=✨, `bitsbadgetier`=💎.
+### Added
+- **First-time chatter messages now show a leading green heart (💚).** Twitch doesn't surface follow events over IRC (those require EventSub/PubSub + a backend), so the `first-msg` highlight is the closest IRC-side "new viewer" indicator — adding the heart gives it a friendly marker to match the green accent stripe.
+
+## [1.0.18] - 2026-06-25
+### Added
+- **Four more message entry animations** in Settings → Display:
+  - **Slide from side** — horizontal slide-in from the left, distinct feel from the existing vertical slide.
+  - **Blur in** — message starts out-of-focus and sharpens (320ms). Subtle but reads very "modern" against stream overlays.
+  - **Glow pulse** — message fades in with a brief colored ring around it (~700ms). The ring uses the author's username color for chat messages, the event accent for event cards, and falls back to the Twitch purple for everything else.
+  - **Decode** — like Typewriter, but each character starts as a random glyph and cycles through more random glyphs for ~240ms before locking in to its real value. Inline emotes/links hold their slot invisibly and reveal at their stagger position. Respects `prefers-reduced-motion`.
+### Changed
+- **Highlighted message variants now render as rounded "pills"** — event cards (subs, gifts, raids, announcements), cheer/bits, first-time chatter, keyword highlights, and Twitch Power-ups all now use a `border-radius` + margin-from-edge treatment with an inset accent stripe (replacing the previous flush-edge `border-left` accent). Looks cleaner against both the dark default theme and transparent overlay mode.
+- **Gigantify Power-up emotes are now substantially larger** — 18× the chat font size (up from 8×), capped at 280px. The Bit-purchased effect now reads at a glance from across the room.
+### Fixed
+- **Power-up gradient shimmer is no longer killed by entry animations.** Previously, any non-`none` message-entry animation permanently overrode the perpetual `power-up-shimmer` animation due to CSS `animation` shorthand specificity. The `.anim` marker class is now stripped once the entry animation completes, so the shimmer resumes automatically.
+- **Message entry animation now defaults to `none`** (was `fade` in 1.0.17). Existing users who haven't picked an animation from Settings won't be silently opted into motion on this update — they pick one explicitly if they want it.
+
+## [1.0.17] - 2026-06-25
+### Added
+- **Message entry animation** selector in Settings → Display. Choose how each new chat message appears: **None**, **Fade in**, **Slide in** (direction-aware — slides up in normal mode, down in inverted mode so it always enters from the newest edge), **Pop** (subtle scale + fade), or **Typewriter** (per-character reveal, ~600ms target with a 8–24ms-per-char cap so long messages don't drag). Respects the OS `prefers-reduced-motion` setting (animations are skipped when reduced motion is on). Persists in `localStorage`.
+
+## [1.0.16] - 2026-05-13
+### Changed
+- **Gigantify Power-up emotes are now twice as large** as the standard big-emote treatment (8× the chat font size, up from 4×). The paid Power-up now reads visibly louder than a casual emote-only message, matching its prominence in the native Twitch client.
+
 ## [1.0.15] - 2026-05-11
 ### Added
 - **Hide commands** toggle in Settings → Filter. When on, messages whose first non-space character is `!` followed by a word character (e.g. `!discord`, `!socials`, `!hi`) are hidden. Plain enthusiasm like `!` or `!!!` is unaffected. Persists in `localStorage`.
